@@ -1,0 +1,16 @@
+# Local development: only MongoDB runs in Docker. Run the API with `uv run` and the PWA with
+# `npm run dev` (http://localhost:5173 is a secure context, so WebCrypto/service workers work there).
+name: tasks-dev
+
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    command: ["--quiet"]
+    ports:
+      - "127.0.0.1:27017:27017"
+    volumes:
+      - mongo-dev-data:/data/db
+
+volumes:
+  mongo-dev-data:

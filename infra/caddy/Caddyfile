@@ -1,0 +1,59 @@
+# Certificates come from Let's Encrypt via the DNS-01 challenge against DuckDNS, so the host never
+# has to be reachable from the internet. The DuckDNS A record points at the host's PRIVATE LAN IP.
+{
+	servers {
+		protocols h1 h2
+	}
+}
+
+{$DUCKDNS_SUBDOMAIN}.duckdns.org {
+	tls {
+		dns duckdns {$DUCKDNS_TOKEN}
+		# Public resolvers: the router's resolver may hide/rewrite DuckDNS answers (DNS rebinding protection).
+		resolvers 1.1.1.1 8.8.8.8
+	}
+
+	encode zstd gzip
+
+	# No access log: it would record who talks to whom (paths contain codes / blob ids) and IPs.
+	log {
+		output discard
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		Cross-Origin-Opener-Policy "same-origin"
+		Permissions-Policy "camera=(self), microphone=(self), geolocation=(), payment=(), usb=()"
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self' wss://{$DUCKDNS_SUBDOMAIN}.duckdns.org; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
+		-Server
+	}
+
+	handle /api/* {
+		# Chunk uploads are <= CHUNK_KB + 16 bytes; JSON bodies are far smaller.
+		request_body {
+			max_size 4MB
+		}
+		reverse_proxy api:8000
+	}
+
+	handle {
+		root * /srv/www
+
+		@nocache path / /index.html /sw.js /manifest.webmanifest
+		header @nocache Cache-Control "no-cache"
+
+		@immutable path /assets/*
+		header @immutable Cache-Control "public, max-age=31536000, immutable"
+
+		try_files {path} /index.html
+		file_server
+	}
+}
+
+# Plain HTTP on the LAN only redirects to HTTPS.
+http://{$DUCKDNS_SUBDOMAIN}.duckdns.org {
+	redir https://{host}{uri} permanent
+}

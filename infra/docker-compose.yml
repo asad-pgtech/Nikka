@@ -1,0 +1,90 @@
+# Production stack: caddy (TLS + PWA) -> api (FastAPI) -> mongo.
+# Run from the repository root:  make up   (or: docker compose -f infra/docker-compose.yml up -d --build)
+name: tasks
+
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    command: ["--quiet", "--wiredTigerCacheSizeGB", "0.5"]
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:?set MONGO_ROOT_USER in infra/.env}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?set MONGO_ROOT_PASSWORD in infra/.env}
+    volumes:
+      - mongo-data:/data/db
+    networks: [internal]
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    logging: &logging
+      driver: local
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  api:
+    build:
+      context: ../backend
+    restart: unless-stopped
+    environment:
+      MONGO_URL: mongodb://${MONGO_ROOT_USER}:${MONGO_ROOT_PASSWORD}@mongo:27017/?authSource=admin
+      MONGO_DB: ${MONGO_DB:-lanchat}
+      MEDIA_DIR: /data/media
+      SESSION_SECRET: ${SESSION_SECRET:-}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-https://${DUCKDNS_SUBDOMAIN}.duckdns.org}
+      MAX_FILE_MB: ${MAX_FILE_MB:-100}
+      CHUNK_KB: ${CHUNK_KB:-512}
+      MAX_PAYLOAD_KB: ${MAX_PAYLOAD_KB:-64}
+      MEDIA_TTL_DAYS: ${MEDIA_TTL_DAYS:-30}
+      QUEUE_TTL_DAYS: ${QUEUE_TTL_DAYS:-30}
+      REQUEST_COOLDOWN_HOURS: ${REQUEST_COOLDOWN_HOURS:-24}
+      REQUEST_DAILY_CAP: ${REQUEST_DAILY_CAP:-20}
+      LOOKUP_PER_MINUTE: ${LOOKUP_PER_MINUTE:-30}
+      AUTOLOCK_DEFAULT_SECONDS: ${AUTOLOCK_DEFAULT_SECONDS:-120}
+      SESSION_TTL_MINUTES: ${SESSION_TTL_MINUTES:-60}
+      JOB_INTERVAL_SECONDS: ${JOB_INTERVAL_SECONDS:-300}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    volumes:
+      - media-data:/data/media
+    # `default` gives outbound internet for Web Push; `internal` reaches mongo.
+    networks: [internal, default]
+    depends_on:
+      mongo:
+        condition: service_healthy
+    logging: *logging
+
+  caddy:
+    build:
+      context: ..
+      dockerfile: infra/caddy/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DUCKDNS_SUBDOMAIN: ${DUCKDNS_SUBDOMAIN:?set DUCKDNS_SUBDOMAIN in infra/.env}
+      DUCKDNS_TOKEN: ${DUCKDNS_TOKEN:?set DUCKDNS_TOKEN in infra/.env}
+    volumes:
+      - caddy-data:/data
+      - caddy-config:/config
+    networks: [default]
+    depends_on:
+      api:
+        condition: service_healthy
+    logging: *logging
+
+networks:
+  default: {}
+  internal:
+    internal: true
+
+volumes:
+  mongo-data:
+  media-data:
+  caddy-data:
+  caddy-config:

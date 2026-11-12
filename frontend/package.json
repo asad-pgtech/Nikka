@@ -1,0 +1,44 @@
+{
+  "name": "lanchat-frontend",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -b --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@noble/curves": "^1.9.7",
+    "idb": "^8.0.4",
+    "qrcode": "^1.5.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "workbox-core": "^7.4.1",
+    "workbox-precaching": "^7.4.1",
+    "workbox-routing": "^7.4.1",
+    "zustand": "^5.1.0"
+  },
+  "devDependencies": {
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/react": "^16.3.3",
+    "@types/qrcode": "^1.5.6",
+    "@types/react": "18.3",
+    "@types/react-dom": "18.3",
+    "@types/ws": "^8.18.2",
+    "@vitejs/plugin-react": "4.3",
+    "fake-indexeddb": "^6.2.8",
+    "jsdom": "^25.0.1",
+    "typescript": "5.6",
+    "vite": "5.4",
+    "vite-plugin-pwa": "^0.21.2",
+    "vitest": "2.1",
+    "ws": "^8.22.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -1,0 +1,13 @@
+# secrets
+infra/.env
+.env
+# deps / builds
+node_modules/
+frontend/dist/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+backend/.media/
+# backups
+backups/
