@@ -98,7 +98,10 @@ overwritten. The safety number (contact info screen) lets people verify in perso
 ## Push
 
 The server sends `{"ref": "<random>"}` only to subscriptions of users with **no** open socket.
-The service worker always shows "Tasks — You have a task pending." (tag `tasks`). Tapping opens the
+The service worker shows "Tasks — "<random open decoy task>" is due today." (falls back to
+"You have a task pending."; tag `tasks`). It reads only the plaintext decoy list. The task list shows
+cosmetic due dates that are never stored (random per page load, or the date picked when adding);
+after a notification tap, the task it named shows as due today. Tapping opens the
 **task list** (deliberate deviation from spec F9, which opened the lock screen: the owner prefers the
 disguise screen). The ref is kept in memory; when the user unlocks via the usual long-press, the
 client syncs, maps ref → conversation from its encrypted ref table, and opens it. Wrong password or

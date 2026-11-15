@@ -8,11 +8,14 @@ import { useLongPress } from '@/hooks/useLongPress';
 import type { Todo } from '@/lib/storage/db';
 import { addTodo, deleteTodo, ensureSeeded, listTodos, updateTodo } from '@/lib/storage/decoy';
 import { useSession } from '@/state/session';
+import { describeDue, dueDateFor, isValidIsoDate, setDueDate, todayIso } from './dueDates';
 
 export function TasksScreen() {
   const [todos, setTodos] = useState<Todo[]>([]);
   const [draft, setDraft] = useState('');
+  const [draftDue, setDraftDue] = useState('');
   const setPhase = useSession((s) => s.setPhase);
+  const dueTodayTaskId = useSession((s) => s.dueTodayTaskId);
   const longPress = useLongPress(() => setPhase('lock'));
 
   useEffect(() => {
@@ -34,9 +37,14 @@ export function TasksScreen() {
     e.preventDefault();
     if (!draft.trim()) return;
     const todo = await addTodo(draft);
+    if (isValidIsoDate(draftDue)) setDueDate(todo.id, draftDue);
     setTodos((list) => [...list, todo]);
     setDraft('');
+    setDraftDue('');
   };
+
+  // Due dates are cosmetic and never stored; the task a notification named is due today.
+  const dueOf = (t: Todo) => (t.id === dueTodayTaskId ? todayIso() : dueDateFor(t.id));
 
   const open = todos.filter((t) => !t.done).length;
 
@@ -61,7 +69,10 @@ export function TasksScreen() {
                   >
                     {t.done && <Icon name="check" size={16} />}
                   </button>
-                  <span className="title">{t.title}</span>
+                  <div className="todo-body">
+                    <span className="title">{t.title}</span>
+                    <DueLabel iso={dueOf(t)} done={t.done} />
+                  </div>
                   <button className="icon-btn" onClick={() => void remove(t)} aria-label={`Delete "${t.title}"`}>
                     <Icon name="trash" size={20} />
                   </button>
@@ -80,10 +91,23 @@ export function TasksScreen() {
           aria-label="New task"
           maxLength={200}
         />
+        <input
+          className="input due-input"
+          type="date"
+          value={draftDue}
+          min={todayIso()}
+          onChange={(e) => setDraftDue(e.target.value)}
+          aria-label="Due date"
+        />
         <button className="btn" type="submit" aria-label="Add task" disabled={!draft.trim()}>
           <Icon name="plus" size={20} />
         </button>
       </form>
     </div>
   );
+}
+
+function DueLabel({ iso, done }: { iso: string; done: boolean }) {
+  const { label, tone } = describeDue(iso);
+  return <span className={`due due-${done ? 'done' : tone}`}>{label}</span>;
 }

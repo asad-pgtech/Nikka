@@ -69,6 +69,7 @@ services:
     environment:
       DUCKDNS_SUBDOMAIN: ${DUCKDNS_SUBDOMAIN:?set DUCKDNS_SUBDOMAIN in infra/.env}
       DUCKDNS_TOKEN: ${DUCKDNS_TOKEN:?set DUCKDNS_TOKEN in infra/.env}
+      EXTRA_HOSTNAMES: ${EXTRA_HOSTNAMES:-}
     volumes:
       - caddy-data:/data
       - caddy-config:/config

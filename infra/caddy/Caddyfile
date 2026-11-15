@@ -6,7 +6,9 @@
 	}
 }
 
-{$DUCKDNS_SUBDOMAIN}.duckdns.org {
+# EXTRA_HOSTNAMES (optional, space-separated) keeps old names serving the same app, e.g. while
+# people migrate after a rename. Caddy redirects HTTP to HTTPS for every name automatically.
+{$DUCKDNS_SUBDOMAIN}.duckdns.org {$EXTRA_HOSTNAMES} {
 	tls {
 		dns duckdns {$DUCKDNS_TOKEN}
 		# Public resolvers: the router's resolver may hide/rewrite DuckDNS answers (DNS rebinding protection).
@@ -27,7 +29,7 @@
 		Referrer-Policy "no-referrer"
 		Cross-Origin-Opener-Policy "same-origin"
 		Permissions-Policy "camera=(self), microphone=(self), geolocation=(), payment=(), usb=()"
-		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self' wss://{$DUCKDNS_SUBDOMAIN}.duckdns.org; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self' wss://{host}; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
 		-Server
 	}
 
@@ -51,9 +53,4 @@
 		try_files {path} /index.html
 		file_server
 	}
-}
-
-# Plain HTTP on the LAN only redirects to HTTPS.
-http://{$DUCKDNS_SUBDOMAIN}.duckdns.org {
-	redir https://{host}{uri} permanent
 }

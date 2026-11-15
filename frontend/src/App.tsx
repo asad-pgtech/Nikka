@@ -9,27 +9,39 @@ import { getVaultMeta } from '@/lib/storage/db';
 import { useSession } from '@/state/session';
 import { getController, hasController } from '@/services/session';
 
-/** Notification taps arrive as `/?ref=…` (cold start) or a service-worker message (warm). */
-function takeRefFromUrl(): string | null {
+const PARAM_RE = /^[A-Za-z0-9_-]{1,64}$/;
+
+/**
+ * Notification taps arrive as `/?ref=…&task=…` (cold start) or a service-worker message (warm).
+ * `task` is the decoy task the notification said is due today.
+ */
+function takeNotificationParams(): { ref: string | null; task: string | null } {
   const url = new URL(location.href);
   const ref = url.searchParams.get('ref');
-  if (ref) {
+  const task = url.searchParams.get('task');
+  if (ref || task) {
     url.searchParams.delete('ref');
+    url.searchParams.delete('task');
     history.replaceState(null, '', url.pathname + url.search);
   }
-  return ref && /^[A-Za-z0-9_-]{1,64}$/.test(ref) ? ref : null;
+  return {
+    ref: ref && PARAM_RE.test(ref) ? ref : null,
+    task: task && PARAM_RE.test(task) ? task : null,
+  };
 }
 
 export function App() {
   const phase = useSession((s) => s.phase);
   const setPhase = useSession((s) => s.setPhase);
   const setPendingRef = useSession((s) => s.setPendingRef);
+  const setDueTodayTaskId = useSession((s) => s.setDueTodayTaskId);
 
   useAutoLock(phase === 'unlocked' || phase === 'unlocking');
 
   useEffect(() => {
     void (async () => {
-      const ref = takeRefFromUrl();
+      const { ref, task } = takeNotificationParams();
+      if (task) setDueTodayTaskId(task);
       if (!(await getVaultMeta())) {
         setPhase('onboarding');
         return;
@@ -39,13 +51,15 @@ export function App() {
       if (ref) setPendingRef(ref);
       setPhase('tasks');
     })();
-  }, [setPhase, setPendingRef]);
+  }, [setPhase, setPendingRef, setDueTodayTaskId]);
 
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return;
     const onMessage = (e: MessageEvent) => {
-      const data = e.data as { type?: string; ref?: string } | null;
-      if (data?.type !== 'open-ref' || typeof data.ref !== 'string') return;
+      const data = e.data as { type?: string; ref?: string; task?: string } | null;
+      if (data?.type !== 'open-ref') return;
+      if (typeof data.task === 'string' && PARAM_RE.test(data.task)) setDueTodayTaskId(data.task);
+      if (typeof data.ref !== 'string' || !PARAM_RE.test(data.ref)) return;
       setPendingRef(data.ref);
       const current = useSession.getState().phase;
       if (current === 'unlocked' && hasController()) getController().resolvePendingRef();
@@ -54,7 +68,7 @@ export function App() {
     };
     navigator.serviceWorker.addEventListener('message', onMessage);
     return () => navigator.serviceWorker.removeEventListener('message', onMessage);
-  }, [setPhase, setPendingRef]);
+  }, [setPhase, setPendingRef, setDueTodayTaskId]);
 
   switch (phase) {
     case 'boot':

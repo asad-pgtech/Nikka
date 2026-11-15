@@ -18,6 +18,12 @@ infra/      Docker Compose (caddy, api, mongo), Caddy image, .env.example, scrip
 > Each phone stores its keys and its entire chat history in browser storage that belongs to
 > `https://<your-subdomain>.duckdns.org`. If you change the subdomain, or move to another name,
 > every installed app starts empty and **all history is lost**. Pick the name once.
+>
+> If you must rename: point the new name at the host (`make duckdns-ip` after editing
+> `DUCKDNS_SUBDOMAIN`), set `EXTRA_HOSTNAMES=<old>.duckdns.org` so the old app keeps working, and
+> `make build up`. Each person exports a backup in the old app, installs from the new address,
+> chooses "Restore from a backup" (same code, friends and history), and re-enables notifications.
+> Remove `EXTRA_HOSTNAMES` once everyone has moved.
 
 ---
 
@@ -137,7 +143,8 @@ If you raise `CHUNK_KB` above ~4000, raise `request_body max_size` in `infra/cad
 * Attach photos, videos, files, GIFs; tap the mic to record a voice note.
 * Long-press a message: reply, copy, delete for me / for everyone.
 * The app locks itself when you switch away or after the idle timeout.
-* Notifications only ever say "You have a task pending." Tapping one opens the task list; long-press
+* Notifications look like reminders: `"<a random to-do>" is due today.` Tapping one opens the task
+  list (that task shows as due today); long-press
   the title and unlock to jump straight to the conversation that received the message.
 
 ## 5. Backups (server side)
