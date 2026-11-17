@@ -25,6 +25,9 @@ export interface StoredIdentity {
   signPriv: string;
   dhPriv: string;
   displayName: string;
+  /** Own profile picture (data: URL), shared with friends end-to-end encrypted. */
+  avatar?: string;
+  avatarTs?: number;
 }
 
 export function generateIdentityKeys(): IdentityKeys {

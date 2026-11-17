@@ -37,7 +37,9 @@ Server verifies `ts` is within ±10 minutes of server time. Clients re-verify si
 - Friendship key: `HKDF-SHA256(ikm = X25519(my_priv, peer_pub), salt = UTF-8("{lowerCode}|{higherCode}") sorted lexicographically, info = "lanchat-friend-v1")` → AES-GCM-256.
 - `payload` = b64(`iv(12) || ciphertext+tag`), AAD = UTF-8 `lanchat-msg-v1|{msg_id}|{from}|{to}`.
 - Sender authenticity: AEAD binding. Only the two friends hold the key, and the direction (`from|to`) is bound in AAD, so a recipient knows any valid message addressed to it with `from=peer` was produced by the peer. See `docs/ARCHITECTURE.md`.
-- Plaintext is JSON: `{"t":"text","body":str,"ts":int,"reply_to"?:str}`, `{"t":"media","ts":int,"media":{...},"caption"?:str,"reply_to"?:str}`, `{"t":"delete","ts":int,"target":msg_id}`.
+- Plaintext is JSON: `{"t":"text","body":str,"ts":int,"reply_to"?:str}`, `{"t":"media","ts":int,"media":{...},"caption"?:str,"reply_to"?:str}`, `{"t":"delete","ts":int,"target":msg_id}`,
+  `{"t":"profile","ts":int,"avatar":str|null}` (profile picture as a `data:image/jpeg;base64,…` URL ≤ 64 KB, or `null` to
+  remove it; receivers keep the one with the highest `ts`; sent with `silent:true`, never shown in the chat).
 
 ## Media encryption
 
@@ -125,7 +127,7 @@ Nothing else is accepted before `ready`.
 | type | fields | effect |
 |---|---|---|
 | `sync` | – | server replies `{"type":"sync","items":[Item],"more":bool}` (oldest first, ≤ 200). Client repeats while `more`; the server keeps a per-connection cursor so pages never repeat. Unacked items are re-sent on the next connection. |
-| `send` | `id` (1–64 chars `[A-Za-z0-9_-]`), `to`, `payload` | Enforces friendship + size. Stores queue item; replies `{"type":"sent","id","ts"}`. Idempotent per (`to`,`from`,`id`) — scoping by sender stops one user squatting another's id. Online recipient gets `{"type":"item","item"}`; otherwise a Web Push is sent. |
+| `send` | `id` (1–64 chars `[A-Za-z0-9_-]`), `to`, `payload`, `silent`?:bool | Enforces friendship + size. Stores queue item; replies `{"type":"sent","id","ts"}`. Idempotent per (`to`,`from`,`id`) — scoping by sender stops one user squatting another's id. Online recipient gets `{"type":"item","item"}`; otherwise a Web Push is sent unless `silent` is `true` (used for profile updates). |
 | `ack` | `qids:[…]` | Deletes acked items addressed to the caller. For each acked `msg` a `delivered` item is queued to the sender (live-delivered if online, never pushed). |
 | `read` | `to`, `ids:[msg_id…]` (≤ 200) | Queues a `read` item to `to` (no push). |
 | `typing` | `to`, `active:bool` | Forwarded live as `{"type":"typing","from","active"}` if friends and online; dropped otherwise. |

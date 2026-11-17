@@ -122,6 +122,9 @@ class MessagingService:
                 raise ProtocolError("payload_too_large", "Payload too large")
             if size < 12 + 16:
                 raise ProtocolError("invalid", "Malformed envelope")
+            silent = frame.get("silent", False)
+            if not isinstance(silent, bool):
+                raise ProtocolError("invalid", "Invalid silent flag")
             if not await self._friends.are_friends(conn.code, to):
                 raise ProtocolError("not_friends", "Not friends")
         except ProtocolError as err:
@@ -142,7 +145,7 @@ class MessagingService:
             }
         )
         await conn.send({"type": "sent", "id": msg_id, "ts": to_ms(doc["created_at"])})
-        await self._deliver(doc, push=True)
+        await self._deliver(doc, push=not silent)
 
     async def _ack(self, conn: Connection, frame: dict[str, Any]) -> None:
         qids = frame.get("qids")

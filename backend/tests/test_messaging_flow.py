@@ -107,3 +107,28 @@ def test_ws_validation(users: Callable[[str], SimClient]) -> None:
         assert recv_until(ws, "pong") == {"type": "pong"}
     finally:
         close(ws)
+
+
+def test_silent_send_is_queued_without_push(client: TestClient, pushes: list[tuple[str, str]]) -> None:
+    a, b = SimClient(client, "Alice"), SimClient(client, "Bob")
+    for sim in (a, b):
+        sim.register()
+        sim.login()
+    a.befriend(b)
+    wa = a.connect()
+
+    profile = json.dumps({"t": "profile", "ts": 1, "avatar": None}).encode()
+    wa.send_json({"type": "send", "id": "p1", "to": b.code, "payload": seal(a, b, "p1", profile), "silent": True})
+    assert recv_until(wa, "sent")["id"] == "p1"
+    assert pushes == []  # recipient offline, but silent: no push
+
+    wa.send_json({"type": "send", "id": "p2", "to": b.code, "payload": seal(a, b, "p2", profile), "silent": "yes"})
+    err = recv_until(wa, "error")
+    assert err["code"] == "invalid" and err["id"] == "p2"
+    close(wa)
+
+    wb = b.connect()
+    wb.send_json({"type": "sync"})
+    items = recv_until(wb, "sync")["items"]
+    assert [i["msg_id"] for i in items] == ["p1"]
+    close(wb)
