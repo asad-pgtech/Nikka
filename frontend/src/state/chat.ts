@@ -15,7 +15,7 @@ export interface TransferProgress {
 export const DEFAULT_SETTINGS: LocalSettings = { readReceipts: true, autoLockSeconds: 120, notifications: false };
 
 interface ChatState {
-  me: { code: string; displayName: string; discoverable: boolean } | null;
+  me: { code: string; displayName: string; discoverable: boolean; avatar?: string } | null;
   settings: LocalSettings;
   connection: ConnectionState;
   contacts: Record<string, Contact>;

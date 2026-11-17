@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Icon } from '@/components/Icon';
-import { Sheet, TopBar } from '@/components/ui';
+import { Avatar, Sheet, TopBar } from '@/components/ui';
 import type { ChatMessage } from '@/domain/types';
 import { formatCode } from '@/lib/crypto/code';
 import { safetyNumber } from '@/lib/crypto/message';
@@ -55,12 +55,16 @@ export function Conversation({ peer }: { peer: string }) {
         title={
           <button
             onClick={() => setShowInfo(true)}
-            style={{ background: 'none', border: 'none', padding: 0, textAlign: 'left', width: '100%' }}
+            className="row"
+            style={{ background: 'none', border: 'none', padding: 0, textAlign: 'left', width: '100%', color: 'inherit', font: 'inherit' }}
             aria-label={`Contact info for ${contact.displayName}`}
           >
-            <div className="ellipsis">{contact.displayName}</div>
-            <div className="tiny muted" style={{ fontWeight: 400, minHeight: '1em' }}>
-              {status}
+            <Avatar name={contact.displayName} src={contact.avatar} small />
+            <div className="grow" style={{ minWidth: 0 }}>
+              <div className="ellipsis">{contact.displayName}</div>
+              <div className="tiny muted" style={{ fontWeight: 400, minHeight: '1em' }}>
+                {status}
+              </div>
             </div>
           </button>
         }
@@ -163,6 +167,11 @@ function ContactInfo({ peer, onClose, blocked }: { peer: string; onClose: () => 
   return (
     <Sheet title={contact.displayName} onClose={onClose}>
       <div className="stack">
+        {contact.avatar && (
+          <div className="avatar-edit">
+            <Avatar name={contact.displayName} src={contact.avatar} large />
+          </div>
+        )}
         <div>
           <div className="tiny muted">Code</div>
           <div className="mono">{formatCode(contact.code)}</div>

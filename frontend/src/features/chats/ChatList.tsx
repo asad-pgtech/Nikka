@@ -38,7 +38,7 @@ export function ChatList({ onFindPeople }: { onFindPeople: () => void }) {
             <div className="list">
               {sorted.map((c) => (
                 <button key={c.code} className="list-item" onClick={() => void getController().openConversation(c.code)}>
-                  <Avatar name={c.displayName} online={online.has(c.code)} />
+                  <Avatar name={c.displayName} src={c.avatar} online={online.has(c.code)} />
                   <div className="grow">
                     <div className="row">
                       <strong className="grow ellipsis">{c.displayName}</strong>

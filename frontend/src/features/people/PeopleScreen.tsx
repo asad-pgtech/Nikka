@@ -134,7 +134,7 @@ export function PeopleScreen() {
           {found && (
             <div className="list" style={{ marginTop: 10 }}>
               <div className="list-item">
-                <Avatar name={found.display_name} />
+                <Avatar src={contacts[found.code]?.avatar} name={found.display_name} />
                 <div className="grow">
                   <strong className="ellipsis">{found.display_name}</strong>
                   <div className="tiny muted mono">{formatCode(found.code)}</div>
@@ -150,7 +150,7 @@ export function PeopleScreen() {
               <div className="list">
                 {incoming.map((f) => (
                   <div className="list-item" key={f.code} style={{ flexWrap: 'wrap' }}>
-                    <Avatar name={f.display_name} />
+                    <Avatar src={contacts[f.code]?.avatar} name={f.display_name} />
                     <div className="grow">
                       <strong className="ellipsis">{f.display_name}</strong>
                       <div className="tiny muted mono">{formatCode(f.code)}</div>
@@ -178,7 +178,7 @@ export function PeopleScreen() {
               <div className="list">
                 {outgoing.map((f) => (
                   <div className="list-item" key={f.code}>
-                    <Avatar name={f.display_name} />
+                    <Avatar src={contacts[f.code]?.avatar} name={f.display_name} />
                     <div className="grow">
                       <strong className="ellipsis">{f.display_name}</strong>
                       <div className="tiny muted">{f.status === 'declined' ? 'Declined' : 'Waiting for reply'}</div>
@@ -203,7 +203,7 @@ export function PeopleScreen() {
             <div className="list">
               {presence.map((p) => (
                 <div className="list-item" key={p.code}>
-                  <Avatar name={p.display_name} online />
+                  <Avatar src={contacts[p.code]?.avatar} name={p.display_name} online />
                   <div className="grow">
                     <strong className="ellipsis">{p.display_name}</strong>
                     <div className="tiny muted mono">{formatCode(p.code)}</div>

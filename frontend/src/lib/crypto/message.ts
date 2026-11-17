@@ -51,7 +51,9 @@ export interface MediaDescriptor {
 export type MessageBody =
   | { t: 'text'; ts: number; body: string; reply_to?: string }
   | { t: 'media'; ts: number; media: MediaDescriptor; caption?: string; reply_to?: string }
-  | { t: 'delete'; ts: number; target: string };
+  | { t: 'delete'; ts: number; target: string }
+  /** Profile picture update; never shown in the chat. `avatar` is a data: URL or null (removed). */
+  | { t: 'profile'; ts: number; avatar: string | null };
 
 export async function encryptMessage(
   key: CryptoKey,
@@ -73,7 +75,8 @@ export async function decryptMessage(
   const pt = await open(key, b64decode(payload), msgAad(id, from, to));
   const body = JSON.parse(fromUtf8(pt)) as MessageBody;
   if (!body || typeof body !== 'object' || typeof body.ts !== 'number') throw new Error('malformed message');
-  if (body.t !== 'text' && body.t !== 'media' && body.t !== 'delete') throw new Error('unknown message type');
+  if (body.t !== 'text' && body.t !== 'media' && body.t !== 'delete' && body.t !== 'profile')
+    throw new Error('unknown message type');
   return body;
 }
 

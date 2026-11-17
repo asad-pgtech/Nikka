@@ -30,6 +30,10 @@ export interface Contact {
   agreementKey: string;
   agreementKeySig: string;
   addedAt: number;
+  /** Profile picture (data: URL) received end-to-end encrypted from the contact. */
+  avatar?: string;
+  /** `ts` of the profile update that set `avatar`; older updates are ignored. */
+  avatarTs?: number;
   lastTs?: number;
   lastPreview?: string;
   unread?: number;

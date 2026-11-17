@@ -1,8 +1,10 @@
 /** Settings (spec F11) and encrypted backup (F12). */
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import QRCode from 'qrcode';
-import { Sheet, Toggle } from '@/components/ui';
+import { Avatar, Sheet, Toggle } from '@/components/ui';
 import { formatCode } from '@/lib/crypto/code';
+import { makeAvatar } from '@/lib/media/thumbnails';
+import { AvatarCropper } from './AvatarCropper';
 import { isIOS, isStandalone } from '@/lib/platform';
 import { exportBackup } from '@/services/backup';
 import { disablePush, enablePush, pushUnavailableReason, sendTestPush } from '@/services/push';
@@ -80,6 +82,7 @@ export function SettingsScreen() {
           </div>
 
           <div className="section-title">Profile</div>
+          <ProfilePicture name={me.displayName} avatar={me.avatar} onError={setNote} />
           <div className="list">
             <button className="list-item" onClick={() => setPanel('name')}>
               <span className="grow">Display name</span>
@@ -165,6 +168,71 @@ export function SettingsScreen() {
         </Sheet>
       )}
     </>
+  );
+}
+
+function ProfilePicture({ name, avatar, onError }: { name: string; avatar?: string; onError: (msg: string) => void }) {
+  const input = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [picked, setPicked] = useState<File | null>(null);
+  const apply = async (fn: () => Promise<void>) => {
+    onError('');
+    setBusy(true);
+    try {
+      await fn();
+    } catch (e) {
+      onError(e instanceof Error ? e.message : 'Could not update the picture.');
+    } finally {
+      setBusy(false);
+    }
+  };
+  const onPick = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow picking the same file again
+    if (!file) return;
+    onError('');
+    if (!file.type.startsWith('image/')) onError('Please choose an image.');
+    else setPicked(file);
+  };
+  return (
+    <div className="avatar-edit">
+      <button
+        className="icon-btn"
+        style={{ width: 'auto', height: 'auto', padding: 0, borderRadius: 48 }}
+        onClick={() => input.current?.click()}
+        disabled={busy}
+        aria-label="Change profile picture"
+      >
+        <Avatar name={name} src={avatar} large />
+      </button>
+      <div className="row">
+        <button className="btn small secondary" onClick={() => input.current?.click()} disabled={busy}>
+          {busy ? 'Saving…' : avatar ? 'Change photo' : 'Add photo'}
+        </button>
+        {avatar && (
+          <button
+            className="btn small ghost"
+            style={{ color: 'var(--danger)' }}
+            onClick={() => void apply(() => getController().setAvatar(null))}
+            disabled={busy}
+          >
+            Remove
+          </button>
+        )}
+      </div>
+      <div className="tiny muted center">Only your friends can see it. It is end-to-end encrypted.</div>
+      <input ref={input} type="file" accept="image/*" hidden onChange={onPick} />
+      {picked && (
+        <AvatarCropper
+          file={picked}
+          onCancel={() => setPicked(null)}
+          onSave={async (crop) => {
+            await getController().setAvatar(await makeAvatar(picked, crop));
+            setPicked(null);
+          }}
+        />
+      )}
+    </div>
   );
 }
 

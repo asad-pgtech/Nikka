@@ -22,6 +22,7 @@ import {
 import { decryptMessage, deriveFriendKey, encryptMessage, type MessageBody } from '@/lib/crypto/message';
 import type { VaultKeys } from '@/lib/crypto/vault';
 import { b64decode, b64encode, randomId } from '@/lib/encoding';
+import { isValidAvatar } from '@/lib/media/thumbnails';
 import { SecureStore } from '@/lib/storage/secureStore';
 import { DEFAULT_SETTINGS, useChat } from '@/state/chat';
 import { useSession } from '@/state/session';
@@ -30,6 +31,8 @@ interface OutboxEntry {
   peer: string;
   id: string;
   body: MessageBody;
+  /** Background update (profile picture): the server must not send a push for it. */
+  silent?: boolean;
 }
 
 const PUSH_REF_CAP = 500;
@@ -42,6 +45,7 @@ export function previewOf(body: MessageBody): string {
     const labels = { image: 'Photo', video: 'Video', audio: 'Voice message', gif: 'GIF', file: 'File' } as const;
     return body.caption ? `${labels[body.media.kind]}: ${body.caption.slice(0, 60)}` : labels[body.media.kind];
   }
+  if (body.t === 'profile') return '';
   return 'Message deleted';
 }
 
@@ -57,6 +61,7 @@ export class ChatController {
   readonly identity: Identity;
   readonly config: ServerConfig;
   private displayName: string;
+  private avatar: { url: string | null; ts: number };
   private socket: ChatSocket | null = null;
   private token: { value: string; exp: number } | null = null;
   private tokenPending: Promise<string> | null = null;
@@ -71,10 +76,11 @@ export class ChatController {
   /** Called by the media service; set by services/media.ts to avoid an import cycle. */
   static autoDownload: ((ctrl: ChatController, msg: ChatMessage) => void) | null = null;
 
-  private constructor(store: SecureStore, identity: Identity, displayName: string, config: ServerConfig) {
+  private constructor(store: SecureStore, identity: Identity, stored: StoredIdentity, config: ServerConfig) {
     this.store = store;
     this.identity = identity;
-    this.displayName = displayName;
+    this.displayName = stored.displayName;
+    this.avatar = { url: stored.avatar ?? null, ts: stored.avatarTs ?? 0 };
     this.config = config;
   }
 
@@ -84,7 +90,7 @@ export class ChatController {
     const stored = await store.getKv<StoredIdentity>('identity');
     if (!stored) throw new Error('vault has no identity');
     const identity = await identityFromStored(stored);
-    const ctrl = new ChatController(store, identity, stored.displayName, config);
+    const ctrl = new ChatController(store, identity, stored, config);
     await ctrl.loadLocal();
     return ctrl;
   }
@@ -95,7 +101,7 @@ export class ChatController {
     this.pushRefs = (await this.store.getKv<Record<string, string>>('pushRefs')) ?? {};
     const contacts = await this.store.listContacts();
     useChat.getState().set({
-      me: { code: this.identity.code, displayName: this.displayName, discoverable: true },
+      me: { code: this.identity.code, displayName: this.displayName, discoverable: true, avatar: this.avatar.url ?? undefined },
       settings,
       contacts: Object.fromEntries(contacts.map((c) => [c.code, c])),
     });
@@ -176,7 +182,7 @@ export class ChatController {
   private async refreshMe(): Promise<void> {
     try {
       const me = await Api.me();
-      useChat.getState().set({ me: { code: me.code, displayName: me.display_name, discoverable: me.discoverable } });
+      this.setMe(me);
     } catch {
       /* non-fatal */
     }
@@ -262,6 +268,10 @@ export class ChatController {
 
     const key = await this.friendKey(contact);
     const body = await decryptMessage(key, item.msg_id, peer, this.identity.code, item.payload);
+    if (body.t === 'profile') {
+      await this.applyRemoteProfile(contact, body.ts, body.avatar);
+      return;
+    }
     if (item.ref) await this.rememberRef(item.ref, peer);
 
     if (body.t === 'delete') {
@@ -292,6 +302,12 @@ export class ChatController {
     if (msg.media && msg.media.size <= AUTO_DOWNLOAD_MAX && msg.media.kind !== 'video' && msg.media.kind !== 'file') {
       ChatController.autoDownload?.(this, msg);
     }
+  }
+
+  private async applyRemoteProfile(contact: Contact, ts: number, avatar: string | null): Promise<void> {
+    if (ts <= (contact.avatarTs ?? 0)) return; // stale or replayed update
+    if (avatar !== null && !isValidAvatar(avatar)) return;
+    await this.saveContact({ ...contact, avatar: avatar ?? undefined, avatarTs: ts });
   }
 
   private async applyRemoteDelete(peer: string, target: string): Promise<void> {
@@ -369,10 +385,11 @@ export class ChatController {
 
   // ---- sending --------------------------------------------------------------------------------------
 
-  private async enqueue(peer: string, id: string, body: MessageBody): Promise<void> {
-    this.outbox.push({ peer, id, body });
+  private async enqueue(peer: string, id: string, body: MessageBody, silent = false): Promise<void> {
+    const entry: OutboxEntry = silent ? { peer, id, body, silent } : { peer, id, body };
+    this.outbox.push(entry);
     await this.store.setKv('outbox', this.outbox);
-    await this.transmit({ peer, id, body });
+    await this.transmit(entry);
   }
 
   private async transmit(entry: OutboxEntry): Promise<void> {
@@ -385,7 +402,7 @@ export class ChatController {
       entry.peer,
       entry.body,
     );
-    this.socket.send({ type: 'send', id: entry.id, to: entry.peer, payload });
+    this.socket.send({ type: 'send', id: entry.id, to: entry.peer, payload, ...(entry.silent ? { silent: true } : {}) });
   }
 
   private flushOutbox(): void {
@@ -546,6 +563,7 @@ export class ChatController {
         agreementKeySig: f.agreement_key_sig,
         addedAt: Date.now(),
       });
+      if (this.avatar.url) await this.sendProfile(f.code); // new friend: share our picture
     }
   }
 
@@ -598,9 +616,38 @@ export class ChatController {
     useChat.getState().set({ settings });
   }
 
+  private setMe(res: { code: string; display_name: string; discoverable: boolean }): void {
+    useChat.getState().set({
+      me: { code: res.code, displayName: res.display_name, discoverable: res.discoverable, avatar: this.avatar.url ?? undefined },
+    });
+  }
+
+  /**
+   * Set (data: URL) or remove (null) the profile picture. It is never uploaded in the clear: each
+   * accepted friend gets it inside an end-to-end encrypted `profile` envelope, sent silently.
+   */
+  async setAvatar(url: string | null): Promise<void> {
+    if (url !== null && !isValidAvatar(url)) throw new Error('Unsupported picture.');
+    this.avatar = { url, ts: Math.max(Date.now(), this.avatar.ts + 1) };
+    const stored = await this.store.getKv<StoredIdentity>('identity');
+    if (stored) await this.store.setKv('identity', { ...stored, avatar: url ?? undefined, avatarTs: this.avatar.ts });
+    const me = useChat.getState().me;
+    if (me) useChat.getState().set({ me: { ...me, avatar: url ?? undefined } });
+    const contacts = useChat.getState().contacts;
+    for (const f of useChat.getState().friends) {
+      if (f.status === 'accepted' && contacts[f.code]) await this.sendProfile(f.code);
+    }
+  }
+
+  private async sendProfile(peer: string): Promise<void> {
+    // Only the latest picture matters: drop queued, not yet sent profile updates for this peer.
+    this.outbox = this.outbox.filter((e) => !(e.peer === peer && e.body.t === 'profile'));
+    await this.enqueue(peer, randomId(), { t: 'profile', ts: this.avatar.ts, avatar: this.avatar.url }, true);
+  }
+
   async updateProfile(patch: { displayName?: string; discoverable?: boolean }): Promise<void> {
     const res = await Api.updateMe({ display_name: patch.displayName, discoverable: patch.discoverable });
-    useChat.getState().set({ me: { code: res.code, displayName: res.display_name, discoverable: res.discoverable } });
+    this.setMe(res);
     if (patch.displayName) {
       this.displayName = res.display_name;
       const stored = await this.store.getKv<StoredIdentity>('identity');

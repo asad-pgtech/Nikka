@@ -44,7 +44,20 @@ export function Toggle({
   );
 }
 
-export function Avatar({ name, online }: { name: string; online?: boolean }) {
+export function Avatar({
+  name,
+  online,
+  src,
+  large,
+  small,
+}: {
+  name: string;
+  online?: boolean;
+  /** Profile picture (data: URL); falls back to initials. */
+  src?: string;
+  large?: boolean;
+  small?: boolean;
+}) {
   const initials = name
     .split(/\s+/)
     .filter(Boolean)
@@ -52,8 +65,8 @@ export function Avatar({ name, online }: { name: string; online?: boolean }) {
     .map((p) => p[0]?.toUpperCase())
     .join('');
   return (
-    <div className="avatar" aria-hidden="true">
-      {initials || '?'}
+    <div className={large ? 'avatar large' : small ? 'avatar small' : 'avatar'} aria-hidden="true">
+      {src ? <img src={src} alt="" draggable={false} /> : initials || '?'}
       {online && <span className="dot" />}
     </div>
   );

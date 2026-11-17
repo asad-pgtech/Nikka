@@ -18,6 +18,13 @@ describe('message encryption', () => {
     expect(await decryptMessage(kb, 'm1', a.code, b.code, payload)).toEqual({ t: 'text', ts: 1, body: 'hello' });
   });
 
+  it('round-trips a profile picture update', async () => {
+    const { a, b, ka, kb } = await pair();
+    const body = { t: 'profile' as const, ts: 5, avatar: 'data:image/jpeg;base64,AAAA' };
+    const payload = await encryptMessage(ka, 'p1', a.code, b.code, body);
+    expect(await decryptMessage(kb, 'p1', a.code, b.code, payload)).toEqual(body);
+  });
+
   it('rejects tampering with id or direction (AEAD binding)', async () => {
     const { a, b, ka, kb } = await pair();
     const payload = await encryptMessage(ka, 'm1', a.code, b.code, { t: 'text', ts: 1, body: 'hi' });

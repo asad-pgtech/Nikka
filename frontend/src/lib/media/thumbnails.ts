@@ -72,3 +72,47 @@ export async function videoPoster(
 function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
   return Promise.race([p, new Promise<T>((_, reject) => setTimeout(() => reject(new Error('timeout')), ms))]);
 }
+
+const AVATAR_SIZE = 256;
+/** Avatars travel inside one encrypted envelope (64 KB cap incl. JSON + base64), so stay well below. */
+const AVATAR_MAX_CHARS = 40_000;
+
+/**
+ * Crop an image to a square (the given source rect, or the centered square) and encode it as a small
+ * JPEG data: URL.
+ */
+export async function makeAvatar(
+  blob: Blob,
+  crop?: { sx: number; sy: number; side: number },
+): Promise<string> {
+  const bitmap = await createImageBitmap(blob, { imageOrientation: 'from-image' });
+  try {
+    const side = crop?.side ?? Math.min(bitmap.width, bitmap.height);
+    const sx = crop?.sx ?? (bitmap.width - side) / 2;
+    const sy = crop?.sy ?? (bitmap.height - side) / 2;
+    const size = Math.max(1, Math.round(Math.min(AVATAR_SIZE, side)));
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('no canvas');
+    ctx.fillStyle = '#fff'; // transparent PNGs would turn black in JPEG
+    ctx.fillRect(0, 0, size, size);
+    ctx.drawImage(bitmap, sx, sy, side, side, 0, 0, size, size);
+    for (const quality of [0.85, 0.75, 0.6, 0.45]) {
+      const url = canvas.toDataURL('image/jpeg', quality);
+      if (url.length <= AVATAR_MAX_CHARS) return url;
+    }
+    throw new Error('That picture could not be made small enough.');
+  } finally {
+    bitmap.close();
+  }
+}
+
+/** Accept only small inline JPEG/PNG/WebP data URLs from peers. */
+export function isValidAvatar(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    value.length <= 60_000 &&
+    /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+=*$/.test(value)
+  );
+}
