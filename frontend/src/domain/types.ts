@@ -22,6 +22,37 @@ export interface ChatMessage {
   readSent?: boolean;
   /** Incoming: opaque push reference, used to route a notification tap to this conversation. */
   ref?: string;
+  /** Emoji reactions, one per side of the chat. `emoji: null` records a removal (kept for its `ts`). */
+  reactions?: { me?: Reaction; peer?: Reaction };
+}
+
+export interface Reaction {
+  emoji: string | null;
+  /** Highest `ts` wins, so stale or replayed updates are ignored. */
+  ts: number;
+}
+
+/** Quick reactions offered in the message menu. */
+export const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏'] as const;
+
+/** A reaction must be a short emoji-like string: no letters, digits or control characters. */
+export function cleanReaction(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const s = value.trim();
+  if (!s || s.length > 32 || [...s].length > 8) return null;
+  // eslint-disable-next-line no-control-regex
+  if (/[\u0000-\u001f\u007f\p{L}\p{N}]/u.test(s)) return null;
+  return s;
+}
+
+/** Reactions to show under a message, in order (theirs first). */
+export function shownReactions(m: Pick<ChatMessage, 'reactions'>): { who: 'me' | 'peer'; emoji: string }[] {
+  const out: { who: 'me' | 'peer'; emoji: string }[] = [];
+  const peer = m.reactions?.peer?.emoji;
+  const me = m.reactions?.me?.emoji;
+  if (peer) out.push({ who: 'peer', emoji: peer });
+  if (me) out.push({ who: 'me', emoji: me });
+  return out;
 }
 
 export interface Contact {

@@ -32,6 +32,13 @@ describe('message encryption', () => {
     expect(await decryptMessage(kb, 'n1', a.code, b.code, payload)).toEqual(body);
   });
 
+  it('round-trips a reaction', async () => {
+    const { a, b, ka, kb } = await pair();
+    const body = { t: 'react' as const, ts: 8, target: 'm1', emoji: '❤️' };
+    const payload = await encryptMessage(ka, 'r1', a.code, b.code, body);
+    expect(await decryptMessage(kb, 'r1', a.code, b.code, payload)).toEqual(body);
+  });
+
   it('rejects tampering with id or direction (AEAD binding)', async () => {
     const { a, b, ka, kb } = await pair();
     const payload = await encryptMessage(ka, 'm1', a.code, b.code, { t: 'text', ts: 1, body: 'hi' });

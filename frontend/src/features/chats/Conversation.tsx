@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Icon } from '@/components/Icon';
 import { Avatar, Sheet, TopBar } from '@/components/ui';
-import { cleanNickname, contactName, NICKNAME_MAX, type ChatMessage } from '@/domain/types';
+import { cleanNickname, contactName, NICKNAME_MAX, QUICK_REACTIONS, type ChatMessage } from '@/domain/types';
 import { formatCode } from '@/lib/crypto/code';
 import { safetyNumber } from '@/lib/crypto/message';
 import { b64encode } from '@/lib/encoding';
@@ -104,6 +104,27 @@ export function Conversation({ peer }: { peer: string }) {
 
       {actionsFor && (
         <Sheet onClose={() => setActionsFor(null)}>
+          {!actionsFor.deleted && canSend && actionsFor.status !== 'failed' && (
+            <div className="reaction-picker" role="group" aria-label="React">
+              {QUICK_REACTIONS.map((emoji) => {
+                const mine = actionsFor.reactions?.me?.emoji === emoji;
+                return (
+                  <button
+                    key={emoji}
+                    className={mine ? 'selected' : undefined}
+                    aria-pressed={mine}
+                    aria-label={mine ? `Remove ${emoji} reaction` : `React ${emoji}`}
+                    onClick={() => {
+                      void ctrl.react(peer, actionsFor.id, mine ? null : emoji);
+                      setActionsFor(null);
+                    }}
+                  >
+                    {emoji}
+                  </button>
+                );
+              })}
+            </div>
+          )}
           {!actionsFor.deleted && canSend && (
             <button
               className="menu-item"

@@ -43,6 +43,9 @@ Server verifies `ts` is within ±10 minutes of server time. Clients re-verify si
   `{"t":"nickname","ts":int,"target":CODE,"name":str|null}` (chat nickname for `target`, which must be the sender or
   the recipient; 1–40 chars, `null` clears it; both phones show it; receivers keep the highest `ts` per target and
   show a local notice line; sent with `silent:true`).
+  `{"t":"react","ts":int,"target":msg_id,"emoji":str|null}` (sender's emoji reaction to message `target`, sent or
+  received; one per person per message, `null` removes it; receivers keep the highest `ts` per sender and message,
+  ignore unknown/deleted targets and non-emoji values; sent with `silent:true`, never shown as its own message).
 
 ## Media encryption
 

@@ -133,10 +133,9 @@ function ProfileForm({
   const [name, setName] = useState('');
   const [pw, setPw] = useState('');
   const [pw2, setPw2] = useState('');
-  const [ack, setAck] = useState(false);
   const strength = passwordStrength(pw);
   const mismatch = pw2.length > 0 && pw !== pw2;
-  const valid = name.trim().length >= 1 && name.trim().length <= 40 && pw.length >= 8 && pw === pw2 && ack;
+  const valid = name.trim().length >= 1 && name.trim().length <= 40 && pw.length >= 8 && pw === pw2;
   const colors = ['#dc2626', '#ea580c', '#ca8a04', '#16a34a', '#15803d'];
 
   const submit = (e: FormEvent) => {
@@ -168,18 +167,6 @@ function ProfileForm({
         <input className="input" type="password" value={pw2} onChange={(e) => setPw2(e.target.value)} autoComplete="new-password" />
       </label>
       {mismatch && <span className="error-text">Passwords do not match.</span>}
-      <div className="banner stack" style={{ gap: 6 }}>
-        <strong>Read this carefully</strong>
-        <span>• If you forget this password, your chat history is lost forever. Nobody can recover it.</span>
-        <span>• The app opens as a to-do list called “Tasks”. Long-press the “Tasks” title to unlock.</span>
-        <span>
-          • A wrong password simply shows the to-do list, with no error. If you mistype, long-press the title and try
-          again.
-        </span>
-      </div>
-      <label className="row small">
-        <input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} /> I understand
-      </label>
       {error && <span className="error-text">{error}</span>}
       <button className="btn block" type="submit" disabled={!valid}>
         Create
@@ -267,9 +254,6 @@ function Done({ code }: { code: string }) {
       <button className="btn secondary" onClick={() => void copy()}>
         {copied ? 'Copied' : 'Copy code'}
       </button>
-      <div className="banner" style={{ textAlign: 'left' }}>
-        Remember: long-press the <strong>Tasks</strong> title to unlock.
-      </div>
       <button className="btn block" onClick={() => setPhase('tasks')}>
         Continue
       </button>
