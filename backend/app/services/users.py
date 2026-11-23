@@ -27,6 +27,10 @@ def public_user(doc: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def shows_last_seen(doc: dict[str, Any]) -> bool:
+    return bool(doc.get("show_last_seen", True))
+
+
 class UserService:
     def __init__(self, users: UserRepository, friendships: FriendshipRepository, lookup_limiter: SlidingWindowLimiter) -> None:
         self._users = users
@@ -69,7 +73,12 @@ class UserService:
         doc = await self._users.get(code)
         if doc is None:
             raise not_found()
-        return {"code": doc["code"], "display_name": doc["display_name"], "discoverable": doc["discoverable"]}
+        return {
+            "code": doc["code"],
+            "display_name": doc["display_name"],
+            "discoverable": doc["discoverable"],
+            "show_last_seen": shows_last_seen(doc),
+        }
 
     async def update_me(self, code: str, patch: MePatch) -> dict[str, Any]:
         fields = patch.model_dump(exclude_none=True)

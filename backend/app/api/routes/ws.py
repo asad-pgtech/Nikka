@@ -106,6 +106,8 @@ async def websocket_endpoint(ws: WebSocket) -> None:
         pass
     finally:
         container.manager.remove(conn)
+        if not container.manager.is_online(code):
+            await container.presence.went_offline(code)
         await container.presence.broadcast()
         try:
             await ws.close()

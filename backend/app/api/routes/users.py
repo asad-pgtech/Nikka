@@ -19,6 +19,8 @@ async def get_me(me: CurrentUser, container: ContainerDep) -> MeOut:
 async def patch_me(body: MePatch, me: CurrentUser, container: ContainerDep) -> MeOut:
     result = await container.users.update_me(me, body)
     await container.presence.broadcast()
+    if body.show_last_seen is not None:
+        await container.presence.notify_friends(me)
     return MeOut(**result)
 
 

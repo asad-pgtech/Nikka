@@ -134,9 +134,9 @@ export function PeopleScreen() {
           {found && (
             <div className="list" style={{ marginTop: 10 }}>
               <div className="list-item">
-                <Avatar src={contacts[found.code]?.avatar} name={found.display_name} />
+                <Avatar src={contacts[found.code]?.avatar} name={contacts[found.code]?.nickname || found.display_name} />
                 <div className="grow">
-                  <strong className="ellipsis">{found.display_name}</strong>
+                  <strong className="ellipsis">{contacts[found.code]?.nickname || found.display_name}</strong>
                   <div className="tiny muted mono">{formatCode(found.code)}</div>
                 </div>
                 {actionFor(found.code)}
@@ -150,9 +150,9 @@ export function PeopleScreen() {
               <div className="list">
                 {incoming.map((f) => (
                   <div className="list-item" key={f.code} style={{ flexWrap: 'wrap' }}>
-                    <Avatar src={contacts[f.code]?.avatar} name={f.display_name} />
+                    <Avatar src={contacts[f.code]?.avatar} name={contacts[f.code]?.nickname || f.display_name} />
                     <div className="grow">
-                      <strong className="ellipsis">{f.display_name}</strong>
+                      <strong className="ellipsis">{contacts[f.code]?.nickname || f.display_name}</strong>
                       <div className="tiny muted mono">{formatCode(f.code)}</div>
                     </div>
                     <div className="row" style={{ gap: 6 }}>
@@ -178,9 +178,9 @@ export function PeopleScreen() {
               <div className="list">
                 {outgoing.map((f) => (
                   <div className="list-item" key={f.code}>
-                    <Avatar src={contacts[f.code]?.avatar} name={f.display_name} />
+                    <Avatar src={contacts[f.code]?.avatar} name={contacts[f.code]?.nickname || f.display_name} />
                     <div className="grow">
-                      <strong className="ellipsis">{f.display_name}</strong>
+                      <strong className="ellipsis">{contacts[f.code]?.nickname || f.display_name}</strong>
                       <div className="tiny muted">{f.status === 'declined' ? 'Declined' : 'Waiting for reply'}</div>
                     </div>
                     {f.status === 'pending' && (
@@ -203,9 +203,9 @@ export function PeopleScreen() {
             <div className="list">
               {presence.map((p) => (
                 <div className="list-item" key={p.code}>
-                  <Avatar src={contacts[p.code]?.avatar} name={p.display_name} online />
+                  <Avatar src={contacts[p.code]?.avatar} name={contacts[p.code]?.nickname || p.display_name} online />
                   <div className="grow">
-                    <strong className="ellipsis">{p.display_name}</strong>
+                    <strong className="ellipsis">{contacts[p.code]?.nickname || p.display_name}</strong>
                     <div className="tiny muted mono">{formatCode(p.code)}</div>
                   </div>
                   {actionFor(p.code)}

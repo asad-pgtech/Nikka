@@ -55,7 +55,7 @@ def test_session_requires_valid_signature_and_single_use_nonce(client: TestClien
     )
     assert again.status_code == 401
     a.login()
-    assert a.get("/api/me").json() == {"code": a.code, "display_name": "Alice", "discoverable": True}
+    assert a.get("/api/me").json() == {"code": a.code, "display_name": "Alice", "discoverable": True, "show_last_seen": True}
     assert client.get("/api/me").status_code == 401
     assert client.get("/api/me", headers={"Authorization": "Bearer v1.x.1.y"}).status_code == 401
 

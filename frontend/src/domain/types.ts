@@ -8,7 +8,8 @@ export interface ChatMessage {
   peer: string;
   dir: 'in' | 'out';
   ts: number;
-  kind: 'text' | 'media';
+  /** `notice`: local system line (e.g. nickname changes), never sent as-is. */
+  kind: 'text' | 'media' | 'notice';
   body?: string;
   media?: MediaDescriptor;
   caption?: string;
@@ -37,6 +38,27 @@ export interface Contact {
   lastTs?: number;
   lastPreview?: string;
   unread?: number;
+  /** Nickname for this contact, shared by both sides of the chat. */
+  nickname?: string;
+  nicknameTs?: number;
+  /** Nickname for me in this chat, shared by both sides. */
+  myNickname?: string;
+  myNicknameTs?: number;
+}
+
+export const NICKNAME_MAX = 40;
+
+/** Name to show for a contact: the chat nickname if set, else their own display name. */
+export function contactName(c: Pick<Contact, 'displayName' | 'nickname'>): string {
+  return c.nickname || c.displayName;
+}
+
+/** Trim and drop control characters; null for empty or too-long names. */
+export function cleanNickname(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  // eslint-disable-next-line no-control-regex
+  const name = value.replace(/[\u0000-\u001f\u007f]/g, '').trim();
+  return name && [...name].length <= NICKNAME_MAX ? name : null;
 }
 
 export interface LocalSettings {
@@ -60,6 +82,8 @@ export interface Friend {
   accept_ts: number | null;
   accept_sig: string | null;
   updated_at: number;
+  /** Epoch ms the friend last went offline; null unless both sides share last seen. */
+  last_seen?: number | null;
 }
 
 export interface PublicUser {

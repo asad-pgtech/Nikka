@@ -15,7 +15,7 @@ from app.repositories.misc import RequestLogRepository
 from app.repositories.users import UserRepository
 from app.services.connections import ConnectionManager
 from app.services.presence import PresenceService
-from app.services.users import public_user
+from app.services.users import public_user, shows_last_seen
 
 log = logging.getLogger(__name__)
 
@@ -44,6 +44,8 @@ class FriendService:
     async def list_for(self, me: str) -> list[dict[str, Any]]:
         docs = await self._friendships.for_user(me)
         peers = await self._users.get_many([u for d in docs for u in d["users"] if u != me])
+        me_doc = await self._users.get(me)
+        i_share = me_doc is not None and shows_last_seen(me_doc)
         out: list[dict[str, Any]] = []
         for doc in docs:
             peer_code = next(u for u in doc["users"] if u != me)
@@ -67,6 +69,11 @@ class FriendService:
                     "accept_ts": doc.get("accept_ts"),
                     "accept_sig": doc.get("accept_sig"),
                     "updated_at": to_ms(doc.get("updated_at")) or 0,
+                    "last_seen": (
+                        to_ms(peer.get("last_seen"))
+                        if status == "accepted" and i_share and shows_last_seen(peer)
+                        else None
+                    ),
                 }
             )
         return out
