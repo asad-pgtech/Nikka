@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { Icon } from '@/components/Icon';
-import type { ChatMessage } from '@/domain/types';
+import { shownReactions, type ChatMessage } from '@/domain/types';
 import { useLongPress } from '@/hooks/useLongPress';
 import { useSwipeReply } from '@/hooks/useSwipeReply';
 import { downloadMedia, mediaUrl } from '@/services/media';
@@ -32,6 +32,7 @@ export const MessageBubble = memo(function MessageBubble({ msg, replied, onActio
     msg.dir === 'out' ? -1 : 1,
     onProgress,
   );
+  const reactions = msg.deleted ? [] : shownReactions(msg);
   if (msg.kind === 'notice') {
     return (
       <div className="notice" role="note">
@@ -46,7 +47,11 @@ export const MessageBubble = memo(function MessageBubble({ msg, replied, onActio
           <Icon name="reply" size={18} />
         </span>
       )}
-      <div className={`bubble${msg.deleted ? ' deleted' : ''}`} ref={swipe.ref} {...longPress}>
+      <div
+        className={`bubble${msg.deleted ? ' deleted' : ''}${reactions.length ? ' has-reactions' : ''}`}
+        ref={swipe.ref}
+        {...longPress}
+      >
         {replied && (
           <div className="reply">{replied.deleted ? 'Deleted message' : (replied.body ?? replied.caption ?? 'Attachment')}</div>
         )}
@@ -63,6 +68,17 @@ export const MessageBubble = memo(function MessageBubble({ msg, replied, onActio
           {formatTime(msg.ts)}
           {msg.dir === 'out' && <StatusIcon msg={msg} onRetry={onRetry} />}
         </div>
+        {reactions.length > 0 && (
+          <button
+            className="reactions"
+            onClick={onActions}
+            aria-label={`Reactions: ${reactions.map((r) => `${r.who === 'me' ? 'you' : 'them'} ${r.emoji}`).join(', ')}`}
+          >
+            {reactions.map((r) => (
+              <span key={r.who}>{r.emoji}</span>
+            ))}
+          </button>
+        )}
       </div>
     </div>
   );

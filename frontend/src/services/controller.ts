@@ -5,6 +5,7 @@
  */
 import {
   cleanNickname,
+  cleanReaction,
   type ChatMessage,
   type Contact,
   type Friend,
@@ -53,7 +54,7 @@ export function previewOf(body: MessageBody): string {
     const labels = { image: 'Photo', video: 'Video', audio: 'Voice message', gif: 'GIF', file: 'File' } as const;
     return body.caption ? `${labels[body.media.kind]}: ${body.caption.slice(0, 60)}` : labels[body.media.kind];
   }
-  if (body.t === 'profile' || body.t === 'nickname') return '';
+  if (body.t === 'profile' || body.t === 'nickname' || body.t === 'react') return '';
   return 'Message deleted';
 }
 
@@ -293,6 +294,10 @@ export class ChatController {
       await this.applyRemoteNickname(contact, item.msg_id, body);
       return;
     }
+    if (body.t === 'react') {
+      await this.applyReaction(peer, body.target, 'peer', body.emoji, body.ts);
+      return;
+    }
     if (item.ref) await this.rememberRef(item.ref, peer);
 
     if (body.t === 'delete') {
@@ -375,11 +380,30 @@ export class ChatController {
     await this.touchContact(peer, msg.ts, text, 0);
   }
 
+  /** Store a reaction on a message if it is newer than the one we have. Returns whether it changed. */
+  private async applyReaction(
+    peer: string,
+    target: string,
+    who: 'me' | 'peer',
+    value: string | null,
+    ts: number,
+  ): Promise<boolean> {
+    const emoji = value === null ? null : cleanReaction(value);
+    if (value !== null && emoji === null) return false;
+    const msg = await this.store.getMessage(peer, target);
+    if (!msg || msg.kind === 'notice' || msg.deleted) return false;
+    if (ts <= (msg.reactions?.[who]?.ts ?? 0)) return false; // stale or replayed
+    const updated: ChatMessage = { ...msg, reactions: { ...msg.reactions, [who]: { emoji, ts } } };
+    await this.store.putMessage(updated);
+    useChat.getState().upsertMessage(updated);
+    return true;
+  }
+
   private async applyRemoteDelete(peer: string, target: string): Promise<void> {
     const msg = await this.store.getMessage(peer, target);
     if (!msg || msg.dir !== 'in') return;
     if (msg.media) await this.store.deleteMedia(msg.media.blobId);
-    const updated: ChatMessage = { ...msg, deleted: true, body: undefined, media: undefined, caption: undefined };
+    const updated: ChatMessage = { ...msg, deleted: true, body: undefined, media: undefined, caption: undefined, reactions: undefined };
     await this.store.putMessage(updated);
     useChat.getState().upsertMessage(updated);
   }
@@ -524,9 +548,22 @@ export class ChatController {
     if (!msg || msg.dir !== 'out') return;
     await this.enqueue(peer, randomId(), { t: 'delete', ts: Date.now(), target: id });
     if (msg.media) await this.store.deleteMedia(msg.media.blobId);
-    const updated: ChatMessage = { ...msg, deleted: true, body: undefined, media: undefined, caption: undefined };
+    const updated: ChatMessage = { ...msg, deleted: true, body: undefined, media: undefined, caption: undefined, reactions: undefined };
     await this.store.putMessage(updated);
     useChat.getState().upsertMessage(updated);
+  }
+
+  /**
+   * Set my reaction on a message (null removes it). The peer gets it in an end-to-end encrypted,
+   * silent `react` envelope; both phones keep the newest reaction per person.
+   */
+  async react(peer: string, id: string, emoji: string | null): Promise<void> {
+    const msg = await this.store.getMessage(peer, id);
+    if (!msg) return;
+    const ts = Math.max(Date.now(), (msg.reactions?.me?.ts ?? 0) + 1);
+    if (!(await this.applyReaction(peer, id, 'me', emoji, ts))) return;
+    if (msg.status === 'failed' || msg.status === 'sending') return; // the peer never got the message
+    await this.enqueue(peer, randomId(), { t: 'react', ts, target: id, emoji }, true);
   }
 
   sendTyping(peer: string, active: boolean): void {
