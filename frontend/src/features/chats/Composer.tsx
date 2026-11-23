@@ -24,7 +24,13 @@ export function Composer({ peer, replyTo, onClearReply }: Props) {
   const libraryInput = useRef<HTMLInputElement>(null);
   const cameraInput = useRef<HTMLInputElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+  const textRef = useRef<HTMLTextAreaElement>(null);
   const ctrl = getController();
+
+  // Jump straight into typing after choosing (or swiping) to reply.
+  useEffect(() => {
+    if (replyTo) textRef.current?.focus();
+  }, [replyTo]);
 
   useEffect(() => {
     if (!recording) return;
@@ -132,6 +138,7 @@ export function Composer({ peer, replyTo, onClearReply }: Props) {
               <Icon name="attach" />
             </button>
             <textarea
+              ref={textRef}
               rows={1}
               value={text}
               placeholder="Message"

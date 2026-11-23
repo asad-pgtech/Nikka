@@ -1,7 +1,8 @@
-import { memo, useEffect, useState } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { Icon } from '@/components/Icon';
 import type { ChatMessage } from '@/domain/types';
 import { useLongPress } from '@/hooks/useLongPress';
+import { useSwipeReply } from '@/hooks/useSwipeReply';
 import { downloadMedia, mediaUrl } from '@/services/media';
 import { getController } from '@/services/session';
 import { useChat } from '@/state/chat';
@@ -11,14 +12,30 @@ interface Props {
   msg: ChatMessage;
   replied?: ChatMessage;
   onActions: () => void;
+  /** Swipe-to-reply handler; omit to disable the gesture. */
+  onReply?: () => void;
   onRetry: () => void;
 }
 
-export const MessageBubble = memo(function MessageBubble({ msg, replied, onActions, onRetry }: Props) {
+export const MessageBubble = memo(function MessageBubble({ msg, replied, onActions, onReply, onRetry }: Props) {
   const longPress = useLongPress(onActions, 500);
+  const hintRef = useRef<HTMLSpanElement>(null);
+  const onProgress = useCallback((p: number) => {
+    const el = hintRef.current;
+    if (!el) return;
+    el.style.opacity = String(p);
+    el.style.transform = `translateY(-50%) scale(${0.5 + p * 0.5})`;
+  }, []);
+  // Swipe toward the middle of the screen: incoming → right, outgoing → left.
+  const swipe = useSwipeReply<HTMLDivElement>(msg.deleted ? undefined : onReply, msg.dir === 'out' ? -1 : 1, onProgress);
   return (
-    <div className={`msg-row ${msg.dir}`}>
-      <div className={`bubble${msg.deleted ? ' deleted' : ''}`} {...longPress}>
+    <div className={`msg-row ${msg.dir}`} {...swipe.handlers}>
+      {onReply && !msg.deleted && (
+        <span className="swipe-hint" ref={hintRef} aria-hidden="true">
+          <Icon name="reply" size={18} />
+        </span>
+      )}
+      <div className={`bubble${msg.deleted ? ' deleted' : ''}`} ref={swipe.ref} {...longPress}>
         {replied && (
           <div className="reply">{replied.deleted ? 'Deleted message' : (replied.body ?? replied.caption ?? 'Attachment')}</div>
         )}

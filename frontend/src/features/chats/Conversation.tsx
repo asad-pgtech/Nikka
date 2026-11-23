@@ -82,6 +82,7 @@ export function Conversation({ peer }: { peer: string }) {
                 msg={m}
                 replied={m.replyTo ? byId.get(m.replyTo) : undefined}
                 onActions={() => setActionsFor(m)}
+                onReply={canSend ? () => setReplyTo(m) : undefined}
                 onRetry={() => retry(m)}
               />
             </div>
