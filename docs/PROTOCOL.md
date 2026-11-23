@@ -40,6 +40,9 @@ Server verifies `ts` is within ±10 minutes of server time. Clients re-verify si
 - Plaintext is JSON: `{"t":"text","body":str,"ts":int,"reply_to"?:str}`, `{"t":"media","ts":int,"media":{...},"caption"?:str,"reply_to"?:str}`, `{"t":"delete","ts":int,"target":msg_id}`,
   `{"t":"profile","ts":int,"avatar":str|null}` (profile picture as a `data:image/jpeg;base64,…` URL ≤ 64 KB, or `null` to
   remove it; receivers keep the one with the highest `ts`; sent with `silent:true`, never shown in the chat).
+  `{"t":"nickname","ts":int,"target":CODE,"name":str|null}` (chat nickname for `target`, which must be the sender or
+  the recipient; 1–40 chars, `null` clears it; both phones show it; receivers keep the highest `ts` per target and
+  show a local notice line; sent with `silent:true`).
 
 ## Media encryption
 
@@ -141,6 +144,7 @@ Nothing else is accepted before `ready`.
 | `typing` | `from`, `active` |
 | `presence` | `users:[{"code","display_name","friend":bool}]` — online, discoverable users (excluding self and anyone with a block either way). Sent after `ready` and on every change. |
 | `friends_changed` | – (hint: refetch `GET /api/friends`) |
+| `last_seen` | `code`, `ts` (epoch ms) — an accepted friend closed their last socket. Only sent when both users have `show_last_seen` on (`PATCH /api/me`); `GET /api/friends` carries the same value as `last_seen` (null otherwise). |
 | `error` | `code`, `message`, `id`? (the `send` id it relates to). Codes: `not_friends`, `payload_too_large`, `invalid`, `unknown_type`, `rate_limited`. |
 
 Limits: binary frames → `invalid`; oversize frame → `payload_too_large` then close `1009`; ≤ 30 frames/s per socket (burst 60) else `rate_limited`. JSON REST bodies > 64 KB → `413`.

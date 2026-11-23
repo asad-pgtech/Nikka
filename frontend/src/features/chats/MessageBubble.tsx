@@ -27,7 +27,18 @@ export const MessageBubble = memo(function MessageBubble({ msg, replied, onActio
     el.style.transform = `translateY(-50%) scale(${0.5 + p * 0.5})`;
   }, []);
   // Swipe toward the middle of the screen: incoming → right, outgoing → left.
-  const swipe = useSwipeReply<HTMLDivElement>(msg.deleted ? undefined : onReply, msg.dir === 'out' ? -1 : 1, onProgress);
+  const swipe = useSwipeReply<HTMLDivElement>(
+    msg.kind === 'notice' || msg.deleted ? undefined : onReply,
+    msg.dir === 'out' ? -1 : 1,
+    onProgress,
+  );
+  if (msg.kind === 'notice') {
+    return (
+      <div className="notice" role="note">
+        {msg.body}
+      </div>
+    );
+  }
   return (
     <div className={`msg-row ${msg.dir}`} {...swipe.handlers}>
       {onReply && !msg.deleted && (

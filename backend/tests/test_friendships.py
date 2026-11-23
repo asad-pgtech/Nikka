@@ -120,3 +120,28 @@ def test_presence_respects_discoverable_and_blocks(users: Callable[[str], SimCli
     finally:
         close(wa)
         close(wb)
+
+
+def test_last_seen_shared_between_friends(users: Callable[[str], SimClient]) -> None:
+    a, b, c = users("A"), users("B"), users("C")
+    a.befriend(b)
+    assert a.get("/api/friends").json()["friends"][0]["last_seen"] is None  # B never connected
+
+    sb = b.connect()
+    sa = a.connect()
+    sb.close(1000)  # graceful close so the server runs its disconnect path
+    frame = recv_until(sa, "last_seen")
+    close(sb)
+    assert frame["code"] == b.code and isinstance(frame["ts"], int)
+    assert a.get("/api/friends").json()["friends"][0]["last_seen"] == frame["ts"]
+
+    # Strangers never get it, even via a pending request.
+    c.request_friend(b)
+    assert c.get("/api/friends").json()["friends"][0]["last_seen"] is None
+
+    # Hiding is reciprocal: A hides theirs, so A no longer sees B's either.
+    me = a.http.patch("/api/me", json={"show_last_seen": False}, headers=a.headers)
+    assert me.status_code == 200 and me.json()["show_last_seen"] is False
+    assert a.get("/api/friends").json()["friends"][0]["last_seen"] is None
+    assert b.get("/api/friends").json()["friends"][0]["last_seen"] is None
+    close(sa)

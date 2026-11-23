@@ -62,7 +62,7 @@ export function Avatar({
     .split(/\s+/)
     .filter(Boolean)
     .slice(0, 2)
-    .map((p) => p[0]?.toUpperCase())
+    .map((p) => [...p][0]?.toUpperCase()) // code points, so emoji aren't split in half
     .join('');
   return (
     <div className={large ? 'avatar large' : small ? 'avatar small' : 'avatar'} aria-hidden="true">

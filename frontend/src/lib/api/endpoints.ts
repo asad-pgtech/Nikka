@@ -1,5 +1,12 @@
 /** Typed REST endpoints. Mirrors docs/PROTOCOL.md. */
 import type { Friend, PublicUser, ServerConfig } from '@/domain/types';
+
+export interface MeResponse {
+  code: string;
+  display_name: string;
+  discoverable: boolean;
+  show_last_seen?: boolean;
+}
 import { api } from './http';
 
 export const Api = {
@@ -24,9 +31,9 @@ export const Api = {
       auth: false,
     }),
 
-  me: () => api<{ code: string; display_name: string; discoverable: boolean }>('/me'),
-  updateMe: (body: { display_name?: string; discoverable?: boolean }) =>
-    api<{ code: string; display_name: string; discoverable: boolean }>('/me', { method: 'PATCH', body }),
+  me: () => api<MeResponse>('/me'),
+  updateMe: (body: { display_name?: string; discoverable?: boolean; show_last_seen?: boolean }) =>
+    api<MeResponse>('/me', { method: 'PATCH', body }),
   deleteMe: () => api('/me', { method: 'DELETE', expect: 'none' }),
 
   lookup: (code: string) => api<PublicUser>(`/users/${encodeURIComponent(code)}`),

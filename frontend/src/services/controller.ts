@@ -3,8 +3,16 @@
  * the per-friend keys. Created on successful unlock and destroyed on lock; UI talks to it through
  * `getController()` and observes decrypted state through the `useChat` store.
  */
-import type { ChatMessage, Contact, Friend, LocalSettings, QueueItem, ServerConfig } from '@/domain/types';
-import { Api } from '@/lib/api/endpoints';
+import {
+  cleanNickname,
+  type ChatMessage,
+  type Contact,
+  type Friend,
+  type LocalSettings,
+  type QueueItem,
+  type ServerConfig,
+} from '@/domain/types';
+import { Api, type MeResponse } from '@/lib/api/endpoints';
 import { ApiError, setTokenProvider } from '@/lib/api/http';
 import { ChatSocket, type ServerEvent } from '@/lib/api/socket';
 import {
@@ -45,7 +53,7 @@ export function previewOf(body: MessageBody): string {
     const labels = { image: 'Photo', video: 'Video', audio: 'Voice message', gif: 'GIF', file: 'File' } as const;
     return body.caption ? `${labels[body.media.kind]}: ${body.caption.slice(0, 60)}` : labels[body.media.kind];
   }
-  if (body.t === 'profile') return '';
+  if (body.t === 'profile' || body.t === 'nickname') return '';
   return 'Message deleted';
 }
 
@@ -101,7 +109,13 @@ export class ChatController {
     this.pushRefs = (await this.store.getKv<Record<string, string>>('pushRefs')) ?? {};
     const contacts = await this.store.listContacts();
     useChat.getState().set({
-      me: { code: this.identity.code, displayName: this.displayName, discoverable: true, avatar: this.avatar.url ?? undefined },
+      me: {
+        code: this.identity.code,
+        displayName: this.displayName,
+        discoverable: true,
+        showLastSeen: true,
+        avatar: this.avatar.url ?? undefined,
+      },
       settings,
       contacts: Object.fromEntries(contacts.map((c) => [c.code, c])),
     });
@@ -214,6 +228,9 @@ export class ChatController {
       case 'friends_changed':
         await this.refreshFriends();
         break;
+      case 'last_seen':
+        chat.set({ friends: chat.friends.map((f) => (f.code === ev.code ? { ...f, last_seen: ev.ts } : f)) });
+        break;
       case 'error':
         if (ev.id) await this.onSendError(ev.id, ev.code);
         break;
@@ -272,6 +289,10 @@ export class ChatController {
       await this.applyRemoteProfile(contact, body.ts, body.avatar);
       return;
     }
+    if (body.t === 'nickname') {
+      await this.applyRemoteNickname(contact, item.msg_id, body);
+      return;
+    }
     if (item.ref) await this.rememberRef(item.ref, peer);
 
     if (body.t === 'delete') {
@@ -308,6 +329,50 @@ export class ChatController {
     if (ts <= (contact.avatarTs ?? 0)) return; // stale or replayed update
     if (avatar !== null && !isValidAvatar(avatar)) return;
     await this.saveContact({ ...contact, avatar: avatar ?? undefined, avatarTs: ts });
+  }
+
+  private async applyRemoteNickname(
+    contact: Contact,
+    msgId: string,
+    body: { ts: number; target: string; name: string | null },
+  ): Promise<void> {
+    const forMe = body.target === this.identity.code;
+    if (!forMe && body.target !== contact.code) return;
+    const name = body.name === null ? null : cleanNickname(body.name);
+    if (body.name !== null && name === null) return;
+    if (body.ts <= ((forMe ? contact.myNicknameTs : contact.nicknameTs) ?? 0)) return; // stale or replayed
+    await this.saveContact(
+      forMe
+        ? { ...contact, myNickname: name ?? undefined, myNicknameTs: body.ts }
+        : { ...contact, nickname: name ?? undefined, nicknameTs: body.ts },
+    );
+    const who = contact.displayName;
+    const text = forMe
+      ? name
+        ? `${who} set your nickname to "${name}"`
+        : `${who} removed your nickname`
+      : name
+        ? `${who} set their nickname to "${name}"`
+        : `${who} removed their nickname`;
+    await this.addNotice(contact.code, msgId, 'in', text);
+  }
+
+  /** Local system line in the chat (not sent as-is). */
+  private async addNotice(peer: string, id: string, dir: 'in' | 'out', text: string): Promise<void> {
+    const msg: ChatMessage = {
+      id,
+      peer,
+      dir,
+      ts: Date.now(),
+      kind: 'notice',
+      body: text,
+      status: dir === 'in' ? 'received' : 'sent',
+      readSent: true, // never send read receipts for notices
+    };
+    await this.store.putMessage(msg);
+    const chat = useChat.getState();
+    if (chat.messages[peer]) chat.upsertMessage(msg);
+    await this.touchContact(peer, msg.ts, text, 0);
   }
 
   private async applyRemoteDelete(peer: string, target: string): Promise<void> {
@@ -616,9 +681,15 @@ export class ChatController {
     useChat.getState().set({ settings });
   }
 
-  private setMe(res: { code: string; display_name: string; discoverable: boolean }): void {
+  private setMe(res: MeResponse): void {
     useChat.getState().set({
-      me: { code: res.code, displayName: res.display_name, discoverable: res.discoverable, avatar: this.avatar.url ?? undefined },
+      me: {
+        code: res.code,
+        displayName: res.display_name,
+        discoverable: res.discoverable,
+        showLastSeen: res.show_last_seen ?? true,
+        avatar: this.avatar.url ?? undefined,
+      },
     });
   }
 
@@ -645,9 +716,44 @@ export class ChatController {
     await this.enqueue(peer, randomId(), { t: 'profile', ts: this.avatar.ts, avatar: this.avatar.url }, true);
   }
 
-  async updateProfile(patch: { displayName?: string; discoverable?: boolean }): Promise<void> {
-    const res = await Api.updateMe({ display_name: patch.displayName, discoverable: patch.discoverable });
+  /**
+   * Set (or clear with null) the nickname for the contact (`them`) or for me (`me`) in this chat. Both
+   * phones show it: the change goes to the peer in an end-to-end encrypted `nickname` envelope.
+   */
+  async setNickname(peer: string, who: 'them' | 'me', value: string | null): Promise<void> {
+    const contact = useChat.getState().contacts[peer];
+    if (!contact) return;
+    const name = value === null ? null : cleanNickname(value);
+    if (value !== null && name === null) throw new Error('Nickname must be 1–40 characters.');
+    const prevTs = (who === 'me' ? contact.myNicknameTs : contact.nicknameTs) ?? 0;
+    const ts = Math.max(Date.now(), prevTs + 1);
+    await this.saveContact(
+      who === 'me'
+        ? { ...contact, myNickname: name ?? undefined, myNicknameTs: ts }
+        : { ...contact, nickname: name ?? undefined, nicknameTs: ts },
+    );
+    const id = randomId();
+    const text =
+      who === 'me'
+        ? name
+          ? `You set your nickname to "${name}"`
+          : 'You removed your nickname'
+        : name
+          ? `You set ${contact.displayName}'s nickname to "${name}"`
+          : `You removed ${contact.displayName}'s nickname`;
+    await this.addNotice(peer, id, 'out', text);
+    const target = who === 'me' ? this.identity.code : peer;
+    await this.enqueue(peer, id, { t: 'nickname', ts, target, name }, true);
+  }
+
+  async updateProfile(patch: { displayName?: string; discoverable?: boolean; showLastSeen?: boolean }): Promise<void> {
+    const res = await Api.updateMe({
+      display_name: patch.displayName,
+      discoverable: patch.discoverable,
+      show_last_seen: patch.showLastSeen,
+    });
     this.setMe(res);
+    if (patch.showLastSeen !== undefined) await this.refreshFriends(); // visibility is reciprocal
     if (patch.displayName) {
       this.displayName = res.display_name;
       const stored = await this.store.getKv<StoredIdentity>('identity');

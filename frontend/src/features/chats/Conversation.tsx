@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Icon } from '@/components/Icon';
 import { Avatar, Sheet, TopBar } from '@/components/ui';
-import type { ChatMessage } from '@/domain/types';
+import { cleanNickname, contactName, NICKNAME_MAX, type ChatMessage } from '@/domain/types';
 import { formatCode } from '@/lib/crypto/code';
 import { safetyNumber } from '@/lib/crypto/message';
 import { b64encode } from '@/lib/encoding';
@@ -10,7 +10,7 @@ import { getController } from '@/services/session';
 import { useChat } from '@/state/chat';
 import { Composer } from './Composer';
 import { MessageBubble } from './MessageBubble';
-import { formatDay } from './format';
+import { formatDay, formatLastSeen } from './format';
 
 export function Conversation({ peer }: { peer: string }) {
   const contact = useChat((s) => s.contacts[peer]);
@@ -40,7 +40,9 @@ export function Conversation({ peer }: { peer: string }) {
   if (!contact) return null;
   const blocked = friend?.status === 'blocked';
   const canSend = friend?.status === 'accepted';
-  const status = typing ? 'typing…' : online ? 'online' : '';
+  const lastSeen = friend?.status === 'accepted' ? friend.last_seen : null;
+  const status = typing ? 'typing…' : online ? 'online' : lastSeen ? formatLastSeen(lastSeen) : '';
+  const name = contactName(contact);
 
   const retry = (m: ChatMessage) => {
     if (m.kind === 'media') void uploadAndDispatch(ctrl, { ...m, status: 'sending' }).catch(() => undefined);
@@ -57,11 +59,11 @@ export function Conversation({ peer }: { peer: string }) {
             onClick={() => setShowInfo(true)}
             className="row"
             style={{ background: 'none', border: 'none', padding: 0, textAlign: 'left', width: '100%', color: 'inherit', font: 'inherit' }}
-            aria-label={`Contact info for ${contact.displayName}`}
+            aria-label={`Contact info for ${name}`}
           >
-            <Avatar name={contact.displayName} src={contact.avatar} small />
+            <Avatar name={name} src={contact.avatar} small />
             <div className="grow" style={{ minWidth: 0 }}>
-              <div className="ellipsis">{contact.displayName}</div>
+              <div className="ellipsis">{name}</div>
               <div className="tiny muted" style={{ fontWeight: 400, minHeight: '1em' }}>
                 {status}
               </div>
@@ -90,7 +92,7 @@ export function Conversation({ peer }: { peer: string }) {
         })}
       </div>
       <div className="typing" aria-hidden="true">
-        {typing ? `${contact.displayName} is typing…` : ''}
+        {typing ? `${name} is typing…` : ''}
       </div>
       {canSend ? (
         <Composer peer={peer} replyTo={replyTo} onClearReply={() => setReplyTo(null)} />
@@ -159,20 +161,37 @@ function ContactInfo({ peer, onClose, blocked }: { peer: string; onClose: () => 
   const contact = useChat((s) => s.contacts[peer]);
   const [safety, setSafety] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [editing, setEditing] = useState<null | 'them' | 'me'>(null);
+  const canEdit = useChat((s) => s.friends.some((f) => f.code === peer && f.status === 'accepted'));
   const ctrl = getController();
+  const name = contactName(contact);
 
   useEffect(() => {
     void safetyNumber(b64encode(ctrl.identity.signPub), contact.identityKey).then(setSafety);
   }, [ctrl, contact.identityKey]);
 
   return (
-    <Sheet title={contact.displayName} onClose={onClose}>
+    <Sheet title={name} onClose={onClose}>
       <div className="stack">
         {contact.avatar && (
           <div className="avatar-edit">
-            <Avatar name={contact.displayName} src={contact.avatar} large />
+            <Avatar name={name} src={contact.avatar} large />
           </div>
         )}
+        {contact.nickname && <div className="tiny muted">Name: {contact.displayName}</div>}
+        <div>
+          <div className="tiny muted">Nicknames · both of you see them</div>
+          <div className="list" style={{ marginTop: 6 }}>
+            <button className="list-item" disabled={!canEdit} onClick={() => setEditing('them')}>
+              <span className="grow ellipsis">{contact.displayName}</span>
+              <span className="muted ellipsis">{contact.nickname ?? 'Set nickname'}</span>
+            </button>
+            <button className="list-item" disabled={!canEdit} onClick={() => setEditing('me')}>
+              <span className="grow">You</span>
+              <span className="muted ellipsis">{contact.myNickname ?? 'Set nickname'}</span>
+            </button>
+          </div>
+        </div>
         <div>
           <div className="tiny muted">Code</div>
           <div className="mono">{formatCode(contact.code)}</div>
@@ -210,6 +229,73 @@ function ContactInfo({ peer, onClose, blocked }: { peer: string; onClose: () => 
           </button>
         )}
       </div>
+      {editing && (
+        <NicknameEditor
+          title={editing === 'me' ? 'Your nickname' : `Nickname for ${contact.displayName}`}
+          initial={(editing === 'me' ? contact.myNickname : contact.nickname) ?? ''}
+          onClose={() => setEditing(null)}
+          onSave={(value) => ctrl.setNickname(peer, editing, value)}
+        />
+      )}
+    </Sheet>
+  );
+}
+
+function NicknameEditor({
+  title,
+  initial,
+  onClose,
+  onSave,
+}: {
+  title: string;
+  initial: string;
+  onClose: () => void;
+  onSave: (value: string | null) => Promise<void>;
+}) {
+  const [value, setValue] = useState(initial);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const save = async (v: string | null) => {
+    setBusy(true);
+    setError('');
+    try {
+      await onSave(v);
+      onClose();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not save.');
+      setBusy(false);
+    }
+  };
+  const valid = cleanNickname(value) !== null && value.trim() !== initial;
+  return (
+    <Sheet title={title} onClose={onClose}>
+      <form
+        className="stack"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (valid) void save(value);
+        }}
+      >
+        <input
+          className="input"
+          value={value}
+          maxLength={NICKNAME_MAX}
+          autoFocus
+          placeholder="Nickname"
+          aria-label="Nickname"
+          onChange={(e) => setValue(e.target.value)}
+        />
+        <div className="tiny muted">Visible to both of you in this chat.</div>
+        {error && <span className="error-text">{error}</span>}
+        <button className="btn" disabled={busy || !valid}>
+          Save
+        </button>
+        {initial && (
+          <button type="button" className="btn secondary" disabled={busy} onClick={() => void save(null)}>
+            Remove nickname
+          </button>
+        )}
+      </form>
     </Sheet>
   );
 }

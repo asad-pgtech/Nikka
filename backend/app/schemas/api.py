@@ -56,11 +56,13 @@ class MeOut(BaseModel):
     code: str
     display_name: str
     discoverable: bool
+    show_last_seen: bool = True
 
 
 class MePatch(StrictModel):
     display_name: DisplayName | None = None
     discoverable: bool | None = None
+    show_last_seen: bool | None = None
 
 
 class PublicUser(BaseModel):
@@ -80,6 +82,8 @@ class Friend(PublicUser):
     accept_ts: int | None
     accept_sig: str | None
     updated_at: int
+    # Epoch ms the friend last went offline; null unless both sides share last seen.
+    last_seen: int | None = None
 
 
 class FriendsOut(BaseModel):

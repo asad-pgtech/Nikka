@@ -13,6 +13,7 @@ export type ServerEvent =
   | { type: 'typing'; from: string; active: boolean }
   | { type: 'presence'; users: PresenceUser[] }
   | { type: 'friends_changed' }
+  | { type: 'last_seen'; code: string; ts: number }
   | { type: 'error'; code: string; message: string; id?: string }
   | { type: 'pong' };
 

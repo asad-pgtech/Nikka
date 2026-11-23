@@ -12,6 +12,21 @@ export function formatDay(ts: number): string {
   return d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
+export function formatLastSeen(ts: number, now = Date.now()): string {
+  if (now - ts < 60_000) return 'last seen just now';
+  const d = new Date(ts);
+  const today = new Date(now);
+  const yesterday = new Date(now);
+  yesterday.setDate(today.getDate() - 1);
+  const when =
+    d.toDateString() === today.toDateString()
+      ? 'today'
+      : d.toDateString() === yesterday.toDateString()
+        ? 'yesterday'
+        : d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+  return `last seen ${when} at ${formatTime(ts)}`;
+}
+
 export function formatListTime(ts: number): string {
   const d = new Date(ts);
   return d.toDateString() === new Date().toDateString()

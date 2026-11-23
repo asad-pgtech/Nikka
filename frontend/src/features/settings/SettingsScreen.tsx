@@ -107,6 +107,17 @@ export function SettingsScreen() {
               <span className="grow">Read receipts</span>
               <Toggle label="Read receipts" checked={settings.readReceipts} onChange={(v) => void ctrl.updateSettings({ readReceipts: v })} />
             </div>
+            <div className="list-item">
+              <div className="grow">
+                Last seen
+                <div className="tiny muted">When off, friends can't see yours and you can't see theirs.</div>
+              </div>
+              <Toggle
+                label="Last seen"
+                checked={me.showLastSeen}
+                onChange={(v) => void safe(() => ctrl.updateProfile({ showLastSeen: v }))}
+              />
+            </div>
             <label className="list-item">
               <span className="grow">Auto-lock</span>
               <select

@@ -220,3 +220,4 @@ button.list-item:active { background: var(--surface-2); }
 .cropper img { position: absolute; left: 50%; top: 50%; max-width: none; pointer-events: none; }
 .cropper-mask { position: absolute; inset: 0; border-radius: 50%; box-shadow: 0 0 0 999px rgb(0 0 0 / 55%); border: 2px solid rgb(255 255 255 / 85%); pointer-events: none; }
 .cropper-zoom { width: 100%; max-width: 280px; accent-color: var(--accent); }
+.notice { width: fit-content; max-width: 85%; margin: 6px auto; padding: 4px 10px; border-radius: 10px; background: var(--surface-2); color: var(--text-2); font-size: 0.78rem; text-align: center; overflow-wrap: anywhere; }
