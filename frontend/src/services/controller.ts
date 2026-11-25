@@ -177,14 +177,22 @@ export class ChatController {
   /** Server lost our registration (e.g. database reset): re-register with the same keys. */
   private async reRegister(): Promise<void> {
     const pub = publicKeysOf(this.identity);
-    await Api.register({
+    const body = {
       code: this.identity.code,
       display_name: this.displayName,
       identity_key: pub.identityKey,
       agreement_key: pub.agreementKey,
       agreement_key_sig: pub.agreementKeySig,
       discoverable: useChat.getState().me?.discoverable ?? true,
-    });
+    };
+    const username = useChat.getState().me?.username ?? undefined;
+    try {
+      await Api.register({ ...body, username });
+    } catch (e) {
+      // Someone took our username meanwhile: register without it; the app then asks for a new one.
+      if (!(username && e instanceof ApiError && e.code === 'username_taken')) throw e;
+      await Api.register(body);
+    }
   }
 
   private async onReady(): Promise<void> {
@@ -723,6 +731,7 @@ export class ChatController {
       me: {
         code: res.code,
         displayName: res.display_name,
+        username: res.username ?? null,
         discoverable: res.discoverable,
         showLastSeen: res.show_last_seen ?? true,
         avatar: this.avatar.url ?? undefined,
@@ -783,9 +792,15 @@ export class ChatController {
     await this.enqueue(peer, id, { t: 'nickname', ts, target, name }, true);
   }
 
-  async updateProfile(patch: { displayName?: string; discoverable?: boolean; showLastSeen?: boolean }): Promise<void> {
+  async updateProfile(patch: {
+    displayName?: string;
+    username?: string;
+    discoverable?: boolean;
+    showLastSeen?: boolean;
+  }): Promise<void> {
     const res = await Api.updateMe({
       display_name: patch.displayName,
+      username: patch.username,
       discoverable: patch.discoverable,
       show_last_seen: patch.showLastSeen,
     });

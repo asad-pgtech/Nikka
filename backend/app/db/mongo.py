@@ -26,6 +26,9 @@ def create_client(url: str) -> AsyncMongoClient:
 
 async def ensure_indexes(db: AsyncDatabase) -> None:
     await db[Collections.USERS].create_index("code", unique=True)
+    await db[Collections.USERS].create_index(
+        "username", unique=True, partialFilterExpression={"username": {"$type": "string"}}, name="uniq_username"
+    )
 
     friendships = db[Collections.FRIENDSHIPS]
     await friendships.create_index("pair", unique=True)

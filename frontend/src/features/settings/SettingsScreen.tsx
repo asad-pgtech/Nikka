@@ -5,6 +5,7 @@ import { Avatar, Sheet, Toggle } from '@/components/ui';
 import { formatCode } from '@/lib/crypto/code';
 import { makeAvatar } from '@/lib/media/thumbnails';
 import { AvatarCropper } from './AvatarCropper';
+import { UsernameForm } from './UsernameForm';
 import { isIOS, isStandalone } from '@/lib/platform';
 import { exportBackup } from '@/services/backup';
 import { disablePush, enablePush, pushUnavailableReason, sendTestPush } from '@/services/push';
@@ -19,7 +20,7 @@ const AUTOLOCK_OPTIONS = [
   { v: 900, label: '15 minutes' },
 ];
 
-type Panel = null | 'name' | 'password' | 'backup' | 'wipe' | 'blocked';
+type Panel = null | 'name' | 'username' | 'password' | 'backup' | 'wipe' | 'blocked';
 
 export function SettingsScreen() {
   const me = useChat((s) => s.me);
@@ -73,7 +74,8 @@ export function SettingsScreen() {
                 <img src={qr} alt={`QR code for ${formatCode(me.code)}`} />
               </div>
             )}
-            <div className="mono" style={{ fontSize: '1.2rem' }}>
+            {me.username && <strong style={{ fontSize: '1.2rem' }}>@{me.username}</strong>}
+            <div className="mono" style={{ fontSize: me.username ? '1rem' : '1.2rem' }}>
               {formatCode(me.code)}
             </div>
             <button className="btn small secondary" onClick={() => void navigator.clipboard?.writeText(formatCode(me.code))}>
@@ -88,10 +90,14 @@ export function SettingsScreen() {
               <span className="grow">Display name</span>
               <span className="muted">{me.displayName}</span>
             </button>
+            <button className="list-item" onClick={() => setPanel('username')}>
+              <span className="grow">Username</span>
+              <span className="muted">{me.username ? `@${me.username}` : 'Not set'}</span>
+            </button>
             <div className="list-item">
               <div className="grow">
                 Discoverable on network
-                <div className="tiny muted">When off, people can still find you by your exact code.</div>
+                <div className="tiny muted">When off, people can still find you by your exact code or username.</div>
               </div>
               <Toggle
                 label="Discoverable on network"
@@ -156,6 +162,11 @@ export function SettingsScreen() {
       </div>
 
       {panel === 'name' && <NamePanel initial={me.displayName} onClose={() => setPanel(null)} />}
+      {panel === 'username' && (
+        <Sheet title="Username" onClose={() => setPanel(null)}>
+          <UsernameForm initial={me.username ?? ''} onDone={() => setPanel(null)} />
+        </Sheet>
+      )}
       {panel === 'password' && <PasswordPanel onClose={() => setPanel(null)} />}
       {panel === 'backup' && <BackupPanel onClose={() => setPanel(null)} />}
       {panel === 'wipe' && <WipePanel onClose={() => setPanel(null)} />}

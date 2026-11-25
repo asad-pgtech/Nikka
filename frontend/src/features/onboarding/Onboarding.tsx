@@ -1,6 +1,8 @@
 /** First-run flow (spec F1): install guide → profile + password → keys/vault/registration → code. */
 import { useEffect, useState, type FormEvent } from 'react';
 import { Spinner } from '@/components/ui';
+import { isValidUsername, normalizeUsername, USERNAME_RULES } from '@/domain/username';
+import { ApiError } from '@/lib/api/http';
 import { formatCode } from '@/lib/crypto/code';
 import { passwordStrength } from '@/lib/crypto/vault';
 import { canPromptInstall, isAndroid, isIOS, isStandalone, onInstallAvailable, promptInstall } from '@/lib/platform';
@@ -30,13 +32,14 @@ export function Onboarding() {
             <ProfileForm
               error={error}
               onRestore={() => setStep('restore')}
-              onSubmit={async (name, pw) => {
+              onSubmit={async (name, username, pw) => {
                 setError('');
                 setStep('working');
                 try {
-                  finish(await createAccount(name, pw));
+                  finish(await createAccount(name, username, pw));
                 } catch (e) {
-                  setError(e instanceof Error ? `Setup failed: ${e.message}` : 'Setup failed');
+                  if (e instanceof ApiError && e.code === 'username_taken') setError('That username is taken. Try another.');
+                  else setError(e instanceof Error ? `Setup failed: ${e.message}` : 'Setup failed');
                   setStep('profile');
                 }
               }}
@@ -126,21 +129,24 @@ function ProfileForm({
   onRestore,
   error,
 }: {
-  onSubmit: (name: string, pw: string) => void;
+  onSubmit: (name: string, username: string, pw: string) => void;
   onRestore: () => void;
   error: string;
 }) {
   const [name, setName] = useState('');
+  const [username, setUsername] = useState('');
+  const uname = normalizeUsername(username);
+  const unameOk = isValidUsername(uname);
   const [pw, setPw] = useState('');
   const [pw2, setPw2] = useState('');
   const strength = passwordStrength(pw);
   const mismatch = pw2.length > 0 && pw !== pw2;
-  const valid = name.trim().length >= 1 && name.trim().length <= 40 && pw.length >= 8 && pw === pw2;
+  const valid = name.trim().length >= 1 && name.trim().length <= 40 && unameOk && pw.length >= 8 && pw === pw2;
   const colors = ['#dc2626', '#ea580c', '#ca8a04', '#16a34a', '#15803d'];
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    if (valid) onSubmit(name.trim(), pw);
+    if (valid) onSubmit(name.trim(), uname, pw);
   };
 
   return (
@@ -149,6 +155,23 @@ function ProfileForm({
       <label className="field">
         Display name
         <input className="input" value={name} onChange={(e) => setName(e.target.value)} maxLength={40} autoComplete="nickname" />
+      </label>
+      <label className="field">
+        Username
+        <input
+          className="input"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          maxLength={21}
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          autoComplete="username"
+          placeholder="e.g. alice_92"
+        />
+        <span className={`tiny ${username && !unameOk ? 'error-text' : 'muted'}`}>
+          People can find you by it. {USERNAME_RULES}. You can change it later.
+        </span>
       </label>
       <label className="field">
         Password (at least 8 characters)

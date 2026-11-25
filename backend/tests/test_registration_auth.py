@@ -55,7 +55,13 @@ def test_session_requires_valid_signature_and_single_use_nonce(client: TestClien
     )
     assert again.status_code == 401
     a.login()
-    assert a.get("/api/me").json() == {"code": a.code, "display_name": "Alice", "discoverable": True, "show_last_seen": True}
+    assert a.get("/api/me").json() == {
+        "code": a.code,
+        "display_name": "Alice",
+        "username": None,
+        "discoverable": True,
+        "show_last_seen": True,
+    }
     assert client.get("/api/me").status_code == 401
     assert client.get("/api/me", headers={"Authorization": "Bearer v1.x.1.y"}).status_code == 401
 
@@ -77,7 +83,7 @@ def test_lookup_exact_only_and_rate_limited(make_client) -> None:  # type: ignor
         s.login()
     dashed = f"{b.code[:4]}-{b.code[4:8]}-{b.code[8:]}".lower()
     assert a.get(f"/api/users/{dashed}").json()["code"] == b.code
-    assert a.get(f"/api/users/{b.code[:6]}").status_code == 404
+    assert a.get(f"/api/users/{b.code[:2]}").status_code == 404  # neither a code nor a username: not rate-limited
     assert a.get(f"/api/users/{b.code}").status_code == 200
     assert a.get(f"/api/users/{b.code}").status_code == 200
     assert a.get(f"/api/users/{b.code}").status_code == 429
@@ -86,3 +92,41 @@ def test_lookup_exact_only_and_rate_limited(make_client) -> None:  # type: ignor
 def test_body_size_limit(client: TestClient) -> None:
     resp = client.post("/api/register", content=b"x" * (70 * 1024), headers={"content-type": "application/json"})
     assert resp.status_code == 413
+
+
+def test_usernames_unique_editable_and_findable(client: TestClient) -> None:
+    a, b, c = SimClient(client, "A"), SimClient(client, "B"), SimClient(client, "C")
+    a.register(username="Alice_1")
+    assert b.register_raw(username="alice_1").json()["detail"]["code"] == "username_taken"
+    assert b.register_raw(username="no").status_code == 422
+    assert b.register_raw(username="bad-name").status_code == 422
+    b.register()
+    c.register()
+    for s in (a, b, c):
+        s.login()
+
+    assert a.get("/api/me").json()["username"] == "alice_1"
+    assert c.get("/api/users/alice_1").json()["code"] == a.code
+    assert c.get("/api/users/@ALICE_1").json()["code"] == a.code
+    assert c.get("/api/users/alice").status_code == 404
+
+    assert b.patch("/api/me", json={"username": "alice_1"}).json()["detail"]["code"] == "username_taken"
+    assert b.patch("/api/me", json={"username": "bob"}).json()["username"] == "bob"
+    assert c.get("/api/users/bob").json()["username"] == "bob"
+
+    # Renaming frees the old name.
+    assert a.patch("/api/me", json={"username": "alice_2"}).json()["username"] == "alice_2"
+    assert c.get("/api/users/alice_1").status_code == 404
+    assert b.patch("/api/me", json={"username": "alice_1"}).status_code == 200
+    # Keeping your own name is not a conflict.
+    assert b.patch("/api/me", json={"username": "alice_1"}).status_code == 200
+
+
+def test_username_that_looks_like_a_code(client: TestClient) -> None:
+    a, b = SimClient(client, "A"), SimClient(client, "B")
+    a.register(username="abcdefghjkmn")  # 12 chars from the code alphabet
+    b.register()
+    a.login()
+    b.login()
+    assert b.get("/api/users/abcdefghjkmn").json()["code"] == a.code
+    assert b.get(f"/api/users/{a.code}").json()["code"] == a.code

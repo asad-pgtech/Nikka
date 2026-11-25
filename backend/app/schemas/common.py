@@ -6,7 +6,7 @@ from typing import Annotated
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, StringConstraints
 
-from app.core.security import b64d, is_valid_code, normalize_code
+from app.core.security import b64d, is_valid_code, is_valid_username, normalize_code, normalize_username
 
 
 class StrictModel(BaseModel):
@@ -18,6 +18,13 @@ def _code(value: str) -> str:
     if not is_valid_code(code):
         raise ValueError("invalid code")
     return code
+
+
+def _username(value: str) -> str:
+    username = normalize_username(value)
+    if not is_valid_username(username):
+        raise ValueError("username must be 3-20 characters: a-z, 0-9, _")
+    return username
 
 
 def _b64_len(n: int):
@@ -43,6 +50,7 @@ def _display_name(value: str) -> str:
 
 
 Code = Annotated[str, StringConstraints(max_length=32), AfterValidator(_code)]
+Username = Annotated[str, StringConstraints(max_length=32), AfterValidator(_username)]
 Key32 = Annotated[str, StringConstraints(max_length=64), AfterValidator(_b64_len(32))]
 Sig64 = Annotated[str, StringConstraints(max_length=100), AfterValidator(_b64_len(64))]
 DisplayName = Annotated[str, StringConstraints(max_length=200), AfterValidator(_display_name)]

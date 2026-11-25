@@ -21,10 +21,19 @@ def public_user(doc: dict[str, Any]) -> dict[str, Any]:
     return {
         "code": doc["code"],
         "display_name": doc["display_name"],
+        "username": doc.get("username"),
         "identity_key": doc["identity_key"],
         "agreement_key": doc["agreement_key"],
         "agreement_key_sig": doc["agreement_key_sig"],
     }
+
+
+def _is_username_dup(exc: DuplicateKeyError) -> bool:
+    return "username" in ((exc.details or {}).get("keyPattern") or {})
+
+
+def username_taken() -> AppError:
+    return conflict("username_taken", "Username is already taken")
 
 
 def shows_last_seen(doc: dict[str, Any]) -> bool:
@@ -52,12 +61,15 @@ class UserService:
             await self._users.create(
                 code=data.code,
                 display_name=data.display_name,
+                username=data.username,
                 identity_key=data.identity_key,
                 agreement_key=data.agreement_key,
                 agreement_key_sig=data.agreement_key_sig,
                 discoverable=data.discoverable,
             )
-        except DuplicateKeyError:
+        except DuplicateKeyError as exc:
+            if _is_username_dup(exc):
+                raise username_taken() from exc
             existing = await self._users.get(data.code)
             return self._same_keys_or_conflict(existing or {}, data)
         log.info("registered code=%s", data.code)
@@ -76,20 +88,29 @@ class UserService:
         return {
             "code": doc["code"],
             "display_name": doc["display_name"],
+            "username": doc.get("username"),
             "discoverable": doc["discoverable"],
             "show_last_seen": shows_last_seen(doc),
         }
 
     async def update_me(self, code: str, patch: MePatch) -> dict[str, Any]:
         fields = patch.model_dump(exclude_none=True)
-        await self._users.update(code, fields)
+        try:
+            await self._users.update(code, fields)
+        except DuplicateKeyError as exc:
+            if _is_username_dup(exc):
+                raise username_taken() from exc
+            raise
         return await self.me(code)
 
-    async def lookup(self, viewer: str, code: str) -> dict[str, Any]:
+    async def lookup(self, viewer: str, *, code: str | None, username: str | None) -> dict[str, Any]:
+        """Find by exact code, falling back to exact username (a username can look like a code)."""
         if not self._lookup_limiter.allow(viewer):
             raise too_many()
-        doc = await self._users.get(code)
-        if doc is None or await self._friendships.is_blocked(viewer, code):
+        doc = await self._users.get(code) if code else None
+        if doc is None and username:
+            doc = await self._users.get_by_username(username)
+        if doc is None or await self._friendships.is_blocked(viewer, doc["code"]):
             raise not_found()
         return public_user(doc)
 

@@ -4,6 +4,7 @@ import type { Friend, PublicUser, ServerConfig } from '@/domain/types';
 export interface MeResponse {
   code: string;
   display_name: string;
+  username?: string | null;
   discoverable: boolean;
   show_last_seen?: boolean;
 }
@@ -15,6 +16,7 @@ export const Api = {
   register: (body: {
     code: string;
     display_name: string;
+    username?: string;
     identity_key: string;
     agreement_key: string;
     agreement_key_sig: string;
@@ -32,11 +34,12 @@ export const Api = {
     }),
 
   me: () => api<MeResponse>('/me'),
-  updateMe: (body: { display_name?: string; discoverable?: boolean; show_last_seen?: boolean }) =>
+  updateMe: (body: { display_name?: string; username?: string; discoverable?: boolean; show_last_seen?: boolean }) =>
     api<MeResponse>('/me', { method: 'PATCH', body }),
   deleteMe: () => api('/me', { method: 'DELETE', expect: 'none' }),
 
-  lookup: (code: string) => api<PublicUser>(`/users/${encodeURIComponent(code)}`),
+  /** Exact code or username. */
+  lookup: (query: string) => api<PublicUser>(`/users/${encodeURIComponent(query)}`),
 
   friends: () => api<{ friends: Friend[] }>('/friends'),
   requestFriend: (to: string, ts: number, signature: string) =>

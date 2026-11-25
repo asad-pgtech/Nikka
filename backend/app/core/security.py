@@ -51,6 +51,18 @@ def is_valid_code(code: str) -> bool:
     return bool(_CODE_RE.match(code))
 
 
+# --- usernames ---------------------------------------------------------------
+_USERNAME_RE = re.compile(r"^[a-z0-9_]{3,20}$")
+
+
+def normalize_username(raw: str) -> str:
+    return raw.strip().lstrip("@").lower()
+
+
+def is_valid_username(username: str) -> bool:
+    return bool(_USERNAME_RE.match(username))
+
+
 def derive_code(identity_key: bytes) -> str:
     """First 60 bits of SHA-256(identity key), big-endian, 5 bits per char."""
     digest = hashlib.sha256(identity_key).digest()

@@ -31,8 +31,13 @@ class SimClient:
     def sign(self, message: bytes) -> str:
         return b64e(self.sign_key.sign(message))
 
-    def register(self, discoverable: bool = True) -> Any:
-        resp = self.http.post(
+    def register(self, discoverable: bool = True, username: str | None = None) -> Any:
+        resp = self.register_raw(discoverable, username)
+        assert resp.status_code in (200, 201), resp.text
+        return resp
+
+    def register_raw(self, discoverable: bool = True, username: str | None = None) -> Any:
+        return self.http.post(
             "/api/register",
             json={
                 "code": self.code,
@@ -41,10 +46,9 @@ class SimClient:
                 "agreement_key": self.ak,
                 "agreement_key_sig": self.sign(akey_message(self.agreement_pub)),
                 "discoverable": discoverable,
+                **({"username": username} if username is not None else {}),
             },
         )
-        assert resp.status_code in (200, 201), resp.text
-        return resp
 
     def login(self) -> None:
         nonce = self.http.post("/api/auth/challenge", json={"code": self.code}).json()["nonce"]
@@ -66,6 +70,9 @@ class SimClient:
 
     def post(self, path: str, **kw: Any) -> Any:
         return self.http.post(path, **self._kw(kw))
+
+    def patch(self, path: str, **kw: Any) -> Any:
+        return self.http.patch(path, **self._kw(kw))
 
     def put(self, path: str, **kw: Any) -> Any:
         return self.http.put(path, **self._kw(kw))

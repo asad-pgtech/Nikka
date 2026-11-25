@@ -1,7 +1,8 @@
-/** People on the network (F4), find by code (F5) and friend requests (F6). */
+/** People on the network (F4), find by code or username (F5) and friend requests (F6). */
 import { useState, type FormEvent } from 'react';
 import { Avatar } from '@/components/ui';
 import type { Friend, PublicUser } from '@/domain/types';
+import { isValidUsername, normalizeUsername } from '@/domain/username';
 import { Api } from '@/lib/api/endpoints';
 import { ApiError } from '@/lib/api/http';
 import { formatCode, normalizeCode } from '@/lib/crypto/code';
@@ -10,13 +11,13 @@ import { getController } from '@/services/session';
 import { useChat } from '@/state/chat';
 
 const REQUEST_ERRORS: Record<string, string> = {
-  not_found: 'No user with that code.',
+  not_found: 'No user with that code or username.',
   already_friends: 'You are already connected.',
   already_pending: 'Request already sent.',
   incoming_pending: 'They already sent you a request — accept it below.',
   cooldown: 'Please wait before asking this person again.',
   daily_cap: 'You have sent too many requests today.',
-  self: 'That is your own code.',
+  self: 'That is you.',
   rate_limited: 'Too many lookups. Try again in a minute.',
 };
 
@@ -42,24 +43,27 @@ export function PeopleScreen() {
     e.preventDefault();
     setFound(null);
     setMessage('');
-    const code = normalizeCode(query);
-    if (!code) {
-      setMessage('Codes look like XXXX-XXXX-XXXX.');
+    const asUsername = query.trim().startsWith('@');
+    const code = asUsername ? null : normalizeCode(query);
+    const username = normalizeUsername(query);
+    if (!code && !isValidUsername(username)) {
+      setMessage('Enter a username or a code like XXXX-XXXX-XXXX.');
       return;
     }
-    if (code === me?.code) {
+    if (code === me?.code || username === me?.username) {
       setMessage(REQUEST_ERRORS.self);
       return;
     }
     setBusy(true);
     try {
-      const user = await Api.lookup(code);
+      const user = await Api.lookup(code ?? `@${username}`);
       const ok = await verifyPeerKeys(user.code, {
         identityKey: user.identity_key,
         agreementKey: user.agreement_key,
         agreementKeySig: user.agreement_key_sig,
       });
-      if (!ok || user.code !== code) setMessage('That user’s keys could not be verified.');
+      const matches = user.code === code || (!!user.username && user.username === username);
+      if (!ok || !matches) setMessage('That user’s keys could not be verified.');
       else setFound(user);
     } catch (err) {
       setMessage(errorText(err));
@@ -112,15 +116,15 @@ export function PeopleScreen() {
         <div className="content">
           <form className="row" onSubmit={search}>
             <input
-              className="input mono"
-              placeholder="XXXX-XXXX-XXXX"
-              aria-label="Find by code"
+              className="input"
+              placeholder="Username or XXXX-XXXX-XXXX"
+              aria-label="Find by username or code"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              autoCapitalize="characters"
+              autoCapitalize="none"
               autoCorrect="off"
               spellCheck={false}
-              maxLength={20}
+              maxLength={24}
             />
             <button className="btn" type="submit" disabled={busy || !query.trim()}>
               Find
@@ -137,7 +141,10 @@ export function PeopleScreen() {
                 <Avatar src={contacts[found.code]?.avatar} name={contacts[found.code]?.nickname || found.display_name} />
                 <div className="grow">
                   <strong className="ellipsis">{contacts[found.code]?.nickname || found.display_name}</strong>
-                  <div className="tiny muted mono">{formatCode(found.code)}</div>
+                  <div className="tiny muted mono">
+                    {found.username ? `@${found.username} · ` : ''}
+                    {formatCode(found.code)}
+                  </div>
                 </div>
                 {actionFor(found.code)}
               </div>

@@ -7,7 +7,7 @@ from typing import Literal
 from pydantic import BaseModel, Field, StringConstraints
 from typing_extensions import Annotated
 
-from app.schemas.common import B64Id, Code, DisplayName, Key32, Sig64, StrictModel
+from app.schemas.common import B64Id, Code, DisplayName, Key32, Sig64, StrictModel, Username
 
 
 class ConfigOut(BaseModel):
@@ -22,6 +22,7 @@ class ConfigOut(BaseModel):
 class RegisterIn(StrictModel):
     code: Code
     display_name: DisplayName
+    username: Username | None = None
     identity_key: Key32
     agreement_key: Key32
     agreement_key_sig: Sig64
@@ -55,12 +56,14 @@ class SessionOut(BaseModel):
 class MeOut(BaseModel):
     code: str
     display_name: str
+    username: str | None = None
     discoverable: bool
     show_last_seen: bool = True
 
 
 class MePatch(StrictModel):
     display_name: DisplayName | None = None
+    username: Username | None = None
     discoverable: bool | None = None
     show_last_seen: bool | None = None
 
@@ -68,6 +71,7 @@ class MePatch(StrictModel):
 class PublicUser(BaseModel):
     code: str
     display_name: str
+    username: str | None = None
     identity_key: str
     agreement_key: str
     agreement_key_sig: str
