@@ -18,13 +18,14 @@ import { DEFAULT_SETTINGS } from '@/state/chat';
 import { getServerConfig } from './config';
 
 /** Register (idempotently) the identity with the server. Returns the code. */
-export async function registerIdentity(stored: StoredIdentity, discoverable = true): Promise<string> {
+export async function registerIdentity(stored: StoredIdentity, username?: string, discoverable = true): Promise<string> {
   const id = await identityFromStored(stored);
   try {
     const pub = publicKeysOf(id);
     await Api.register({
       code: id.code,
       display_name: stored.displayName,
+      username,
       identity_key: pub.identityKey,
       agreement_key: pub.agreementKey,
       agreement_key_sig: pub.agreementKeySig,
@@ -36,12 +37,12 @@ export async function registerIdentity(stored: StoredIdentity, discoverable = tr
   }
 }
 
-export async function createAccount(displayName: string, password: string): Promise<string> {
+export async function createAccount(displayName: string, username: string, password: string): Promise<string> {
   const keys = generateIdentityKeys();
   const id = await identityFromKeys(keys);
   const stored = serializeIdentity(id, displayName.trim());
   wipeIdentity(id);
-  const code = await registerIdentity(stored);
+  const code = await registerIdentity(stored, username);
 
   const config = await getServerConfig();
   const { meta, keys: vaultKeys } = await createVault(password);

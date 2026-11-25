@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Icon } from '@/components/Icon';
 import { PeopleScreen } from '@/features/people/PeopleScreen';
 import { SettingsScreen } from '@/features/settings/SettingsScreen';
+import { UsernameRequired } from '@/features/settings/UsernameForm';
 import { useChat } from '@/state/chat';
 import { ChatList } from './ChatList';
 import { Conversation } from './Conversation';
@@ -15,7 +16,13 @@ export function ChatShell() {
   const connection = useChat((s) => s.connection);
   const incoming = useChat((s) => s.friends.filter((f) => f.status === 'pending' && f.direction === 'incoming').length);
 
-  if (activePeer) return <Conversation peer={activePeer} />;
+  if (activePeer)
+    return (
+      <>
+        <Conversation peer={activePeer} />
+        <UsernameRequired />
+      </>
+    );
 
   return (
     <div className="screen">
@@ -34,6 +41,7 @@ export function ChatShell() {
         <TabButton tab="people" current={tab} onSelect={setTab} icon="people" label="People" badge={incoming} />
         <TabButton tab="settings" current={tab} onSelect={setTab} icon="settings" label="Settings" />
       </nav>
+      <UsernameRequired />
     </div>
   );
 }

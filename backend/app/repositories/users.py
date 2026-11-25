@@ -13,6 +13,9 @@ class UserRepository(Repository):
     async def get(self, code: str) -> dict[str, Any] | None:
         return await self.col.find_one({"code": code})
 
+    async def get_by_username(self, username: str) -> dict[str, Any] | None:
+        return await self.col.find_one({"username": username})
+
     async def get_many(self, codes: list[str]) -> dict[str, dict[str, Any]]:
         if not codes:
             return {}
@@ -24,22 +27,24 @@ class UserRepository(Repository):
         *,
         code: str,
         display_name: str,
+        username: str | None,
         identity_key: str,
         agreement_key: str,
         agreement_key_sig: str,
         discoverable: bool,
     ) -> None:
-        await self.col.insert_one(
-            {
-                "code": code,
-                "display_name": display_name,
-                "identity_key": identity_key,
-                "agreement_key": agreement_key,
-                "agreement_key_sig": agreement_key_sig,
-                "discoverable": discoverable,
-                "created_at": utcnow(),
-            }
-        )
+        doc: dict[str, Any] = {
+            "code": code,
+            "display_name": display_name,
+            "identity_key": identity_key,
+            "agreement_key": agreement_key,
+            "agreement_key_sig": agreement_key_sig,
+            "discoverable": discoverable,
+            "created_at": utcnow(),
+        }
+        if username is not None:
+            doc["username"] = username
+        await self.col.insert_one(doc)
 
     async def update(self, code: str, fields: dict[str, Any]) -> dict[str, Any] | None:
         if fields:

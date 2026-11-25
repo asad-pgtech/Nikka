@@ -101,6 +101,7 @@ export interface LocalSettings {
 export interface Friend {
   code: string;
   display_name: string;
+  username?: string | null;
   identity_key: string;
   agreement_key: string;
   agreement_key_sig: string;
@@ -120,6 +121,7 @@ export interface Friend {
 export interface PublicUser {
   code: string;
   display_name: string;
+  username?: string | null;
   identity_key: string;
   agreement_key: string;
   agreement_key_sig: string;

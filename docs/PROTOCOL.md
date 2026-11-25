@@ -62,7 +62,7 @@ Server verifies `ts` is within ±10 minutes of server time. Clients re-verify si
 |---|---|---|---|
 | GET | `/api/health` | – | `{"status":"ok"}` |
 | GET | `/api/config` | – | `{"max_file_bytes","chunk_bytes","max_payload_bytes","autolock_default_seconds","media_ttl_days","vapid_public_key"}` (`vapid_public_key` b64 uncompressed P-256 point, or `null`) |
-| POST | `/api/register` | `{"code","display_name","identity_key","agreement_key","agreement_key_sig","discoverable":bool}` | `201 {"code"}`. Server checks code derivation + sig. Same code with same keys → `200` (idempotent). Same code, different keys → `409 code_taken`. |
+| POST | `/api/register` | `{"code","display_name","username"?,"identity_key","agreement_key","agreement_key_sig","discoverable":bool}` | `201 {"code"}`. Server checks code derivation + sig. Same code with same keys → `200` (idempotent). Same code, different keys → `409 code_taken`. Username in use → `409 username_taken`. |
 | POST | `/api/auth/challenge` | `{"code"}` | `{"nonce","expires_at"}` (nonce valid 60 s, single use) |
 | POST | `/api/auth/session` | `{"code","nonce","signature"}` | `{"token","expires_at"}` |
 
@@ -71,10 +71,10 @@ Server verifies `ts` is within ±10 minutes of server time. Clients re-verify si
 ### Authenticated
 | Method | Path | Body | Response |
 |---|---|---|---|
-| GET | `/api/me` | – | `{"code","display_name","discoverable"}` |
-| PATCH | `/api/me` | `{"display_name"?,"discoverable"?}` | same as GET |
+| GET | `/api/me` | – | `{"code","display_name","username","discoverable","show_last_seen"}` (`username` null until chosen) |
+| PATCH | `/api/me` | `{"display_name"?,"username"?,"discoverable"?,"show_last_seen"?}` | same as GET. Username in use → `409 username_taken`. |
 | DELETE | `/api/me` | – | `204`, removes user, friendships, queue, media, push subs |
-| GET | `/api/users/{code}` | – | `PublicUser` = `{"code","display_name","identity_key","agreement_key","agreement_key_sig"}`; `404 not_found` if missing **or** a block exists either way. Rate-limited (`429 rate_limited`). Exact code only. |
+| GET | `/api/users/{query}` | – | `PublicUser` = `{"code","display_name","username","identity_key","agreement_key","agreement_key_sig"}`; `404 not_found` if missing **or** a block exists either way. Rate-limited (`429 rate_limited`). `query` is an exact code, or an exact username (`name` or `@name`); a bare query that is a valid code is tried as a code first. |
 | GET | `/api/friends` | – | `{"friends":[Friend]}` |
 | POST | `/api/friends/request` | `{"to","ts","signature"}` | `201 {"status":"pending"}`; errors `404 not_found`, `409 already_friends`, `409 already_pending`, `409 incoming_pending`, `429 cooldown`, `429 daily_cap`, `400 self` |
 | POST | `/api/friends/{code}/accept` | `{"ts","signature"}` | `200 {"status":"accepted"}` (only recipient of a pending request) |
@@ -154,3 +154,11 @@ Limits: binary frames → `invalid`; oversize frame → `payload_too_large` then
 
 ### Push payload
 JSON `{"ref":"b64"}` only. The service worker always shows title `Tasks`, body `You have a task pending.`, tag `tasks`.
+
+## Usernames
+
+A username is an optional, editable, unique alias for a user's code. The code stays the identity
+(it is bound to the key and used in auth, key agreement and signatures); the username is only a
+directory handle. Rules: 3–20 chars of `a-z 0-9 _`, stored lowercase, so uniqueness is
+case-insensitive. The client asks new users for one at onboarding and prompts existing users
+without one after unlock. Changing it frees the old name immediately.

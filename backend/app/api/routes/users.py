@@ -4,7 +4,7 @@ from fastapi import APIRouter, Response, status
 
 from app.api.deps import ContainerDep, CurrentUser
 from app.core.errors import not_found
-from app.core.security import is_valid_code, normalize_code
+from app.core.security import is_valid_code, is_valid_username, normalize_code, normalize_username
 from app.schemas.api import MeOut, MePatch, PublicUser
 
 router = APIRouter(tags=["users"])
@@ -30,9 +30,14 @@ async def delete_me(me: CurrentUser, container: ContainerDep) -> Response:
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.get("/users/{code}", response_model=PublicUser)
-async def lookup(code: str, me: CurrentUser, container: ContainerDep) -> PublicUser:
-    normalized = normalize_code(code[:32])
-    if not is_valid_code(normalized):
+@router.get("/users/{query}", response_model=PublicUser)
+async def lookup(query: str, me: CurrentUser, container: ContainerDep) -> PublicUser:
+    """Exact code (`XXXX-XXXX-XXXX`) or username (`name` / `@name`)."""
+    query = query[:32]
+    code = None if query.startswith("@") else normalize_code(query)
+    username = normalize_username(query)
+    code = code if code and is_valid_code(code) else None
+    username = username if is_valid_username(username) else None
+    if code is None and username is None:
         raise not_found()
-    return PublicUser(**await container.users.lookup(me, normalized))
+    return PublicUser(**await container.users.lookup(me, code=code, username=username))
